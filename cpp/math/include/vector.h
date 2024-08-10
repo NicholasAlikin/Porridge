@@ -59,6 +59,7 @@ public:
     vector<T>& operator/=(const T&);
 
     vector<T>& operator=(const vector<T>&) &;
+    vector<T>& operator=(vector<T>&&) &;
     
     T& operator[](size_t) &;
     const T& operator[](size_t) const &;
@@ -387,6 +388,12 @@ T dot(const vector<T>& v1, const vector<T>& v2) {
 template <typename T>
 vector<T>& vector<T>::operator=(const vector<T>& other) & {
     this->v = other.v;
+    return *this;
+}
+
+template <typename T>
+vector<T>& vector<T>::operator=(vector<T>&& other) & {
+    this->v = std::move(other.v);
     return *this;
 }
 
