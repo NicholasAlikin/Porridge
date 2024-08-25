@@ -1,3 +1,7 @@
 .vscode/
 python/
 build/
+*.gch
+*.exe
+main.cpp
+temp.cpp
