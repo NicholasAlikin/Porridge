@@ -1,4 +1,5 @@
 #include "vector.h"
+#include <cmath>
 
 namespace math {
 
@@ -158,7 +159,7 @@ auto det(const M& mat)
 
 template <Matrix M1, ArithmeticVectorsLike<M1> M2>
 auto dot(const M1& mat1, const M2& mat2)
-        -> general_arithmetic_vector_like_type_t<M1,M2> {
+        -> general_vector_type_t<M1,M2> {
     auto sz1 = size(mat1);
     auto sz2 = size(mat2);
     if (sz1[1] != sz2[0]) {
@@ -171,7 +172,8 @@ auto dot(const M1& mat1, const M2& mat2)
             for (j = 0; j < sz2[1]; ++j) {
                 res[i][j] += mat1[i][k]*mat2[k][j];
             }
-        }  
+        }
+        
     }
     return res;
 }
@@ -207,6 +209,147 @@ auto dot(const V1& vec1, const V2& vec2)
     return res;
 }
 
+/*template <NotVectorLike T>
+T&& abs(std::remove_reference_t<T>& value) {
+    if (value < 0)
+        value *= -1;
+    return std::forward<T>(value);
+}
+
+template <NotVectorLike T>
+T&& abs(std::remove_reference_t<T>&& value) {
+    if (value < 0)
+        value *= -1;
+    return std::forward<T>(value);
+}
+
+template <VectorLike V>
+V&& abs(V&& vec) {
+    auto it = vec.begin(), end = vec.end();
+    while (it != end) {
+        abs(*it);
+        ++it;
+    }
+    return std::forward<V>(vec);
+}*/
+
+
+template <Vector V1, ArithmeticVectorsLike<V1> V2>
+auto kron(const V1& v1, const V2& v2)
+        -> vector_t<general_type_t<V1,V2>,1>
+{
+    vector_t<general_type_t<V1,V2>,1> res = zeros<general_type_t<V1,V2>>(v1.size()*v2.size());
+    typename V1::basic_value_type v1_value;
+
+    auto it =       res.begin();
+   
+    auto it1 =      v1.begin(),     end1 = v1.end();
+   
+    auto end2 =     v2.end();
+    decltype(end2)  it2;
+
+    while (it1 != end1) {
+        v1_value = *it1;
+        it2 = v2.begin();
+        while (it2 != end2) {
+            *it = v1_value * (*it2);
+            ++it;   ++it2;
+        }
+        ++it1;
+    }
+    return res;
+}
+
+template <Vector V, Matrix M>
+requires HaveGeneralType<V,M>
+auto kron(const V& v, const M& m)
+        -> vector_t<general_type_t<V,M>,2>
+{
+    auto m_sz = size(m);
+    vector_t<general_type_t<V,M>,2> res = zeros<general_type_t<V,M>>(v.size()*m_sz[0], m_sz[1]);
+    typename V::basic_value_type v_value;
+
+    auto it_row = res.begin();
+    decltype(res[0].begin()) it_col; 
+    
+    auto itv = v.begin(), endv = v.end();
+    
+    auto endm_row = m.end();
+    decltype(endm_row) itm_row;
+    decltype(m[0].end()) itm_col, endm_col;
+
+    while (itv != endv) {
+
+        v_value = *itv;
+        itm_row = m.begin();
+
+        while (itm_row != endm_row) {
+
+            itm_col = (*itm_row).begin();
+            endm_col = (*itm_row).end();
+            it_col = (*it_row).begin();
+
+            while (itm_col != endm_col) {
+
+                *it_col = v_value * (*itm_col);
+                ++it_col;   ++itm_col;
+            
+            }
+            ++it_row;   ++itm_row;
+
+        }
+        ++itv;
+    }
+    return res;
+}
+
+template <Matrix M1, ArithmeticVectorsLike<M1> M2>
+auto kron(const M1& m1, const M2& m2)
+        -> vector_t<general_type_t<M1,M2>,2>
+{
+    auto m1_sz = size(m1);
+    auto m2_sz = size(m2);
+    vector_t<general_type_t<M1,M2>,2> res = zeros<general_type_t<M1,M2>>(m1_sz[0]*m2_sz[0],
+                                                                         m1_sz[1]*m2_sz[1]);
+    typename M1::basic_value_type m1_value;
+
+    decltype(res.begin())    it_row;
+    decltype(res[0].begin()) it_col;
+
+    decltype(m2.begin())    it2_row, end2_row = m2.end();
+    decltype(m2[0].begin()) it2_col, end2_col;  
+    
+    size_t row_m1 = 0, col_m1 = 0;
+    
+    for (row_m1 = 0; row_m1 < m1_sz[0]; ++row_m1) {
+
+        for (col_m1 = 0; col_m1 < m1_sz[1]; ++col_m1) {
+            
+            m1_value = m1[row_m1][col_m1];
+            it_row = res.begin()+row_m1*m2_sz[0];
+            it2_row = m2.begin();
+            
+            while (it2_row != end2_row) {
+
+                it_col = (*it_row).begin() + col_m1*m2_sz[1];
+                it2_col = (*it2_row).begin();
+                end2_col = (*it2_row).end();
+                
+                while (it2_col != end2_col) {
+
+                    *it_col = m1_value * (*it2_col);
+                    ++it_col;   ++it2_col;
+                
+                }
+                ++it_row;   ++it2_row;
+            }
+            
+        }
+        
+    }
+
+    return res;
+}
 
 
 
