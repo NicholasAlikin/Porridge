@@ -1,12 +1,12 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(math)
+project(a)
 
 set (VERSION_MAJOR 0)
 set (VERSION_MINOR 0)
 set (VERSION "${VERSION_MAJOR}.${VERSION_MINOR}")
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++23 -Wall")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++23 -Wall -O2")
 
 file (GLOB
             CPP_SOURCES "source/*.cpp")

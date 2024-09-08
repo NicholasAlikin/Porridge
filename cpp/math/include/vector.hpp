@@ -1,3 +1,4 @@
+#pragma once
 #include <iostream>
 #include <vector>
 #include <array>
@@ -171,7 +172,7 @@ class vector {
     std::vector<T> v;
 public:
     using value_type = T;
-    using reference = value_type&;
+    using reference = T&;
     static const bool is_vector_like = true;
     using basic_value_type = basic_value_type_t<T>;
     
@@ -179,10 +180,12 @@ public:
     using iterator       = typename std::vector<T>::iterator;
     using const_iterator = typename std::vector<T>::const_iterator;
     
-    iterator       begin();
-    const_iterator begin() const;
-    iterator       end();
-    const_iterator end()   const;
+    constexpr iterator       begin();
+    constexpr const_iterator begin() const;
+    constexpr const_iterator cbegin() const;
+    constexpr iterator       end();
+    constexpr const_iterator end()   const;
+    constexpr const_iterator cend()   const;
     
     
     vector()                             : v()        {}//{ std::cout << "default\n";}
@@ -276,7 +279,7 @@ template <ArithmeticVectorsLike<vector<T>> V2>
 vector<T>& vector<T>::operator=(const V2& other) & {
     auto it = this->begin(), end = this->end();
     auto it1 = other.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1;
         ++it;   ++it1;
     }
@@ -320,24 +323,34 @@ const T& vector<T>::at(size_t pos) const {
 // get iterator methods
 
 template<typename T>
-typename vector<T>::iterator vector<T>::begin() {
+constexpr typename vector<T>::iterator vector<T>::begin() {
     return this->v.begin();
 } 
 
 template<typename T>
-typename vector<T>::const_iterator vector<T>::begin() const {
+constexpr typename vector<T>::const_iterator vector<T>::begin() const {
     return this->v.begin();
+}
+
+template<typename T>
+constexpr typename vector<T>::const_iterator vector<T>::cbegin() const {
+    return this->v.cbegin();
 } 
 
 template<typename T>
-typename vector<T>::iterator vector<T>::end() {
+constexpr typename vector<T>::iterator vector<T>::end() {
     return this->v.end();
 } 
 
 template<typename T>
-typename vector<T>::const_iterator vector<T>::end() const {
+constexpr typename vector<T>::const_iterator vector<T>::end() const {
     return this->v.end();
-} 
+}
+
+template<typename T>
+constexpr typename vector<T>::const_iterator vector<T>::cend() const {
+    return this->v.cend();
+}
 
 
 
@@ -368,7 +381,7 @@ requires std::convertible_to<basic_value_type_t<Vec2>,
 Vec1& operator+=(Vec1& v1, const Vec2& v2) {
     auto it = v1.begin(), end = v1.end();
     auto it1 = v2.begin();
-    while (it != end) {
+    while (it < end) {
         *it += *it1;
         ++it;   ++it1;
     }
@@ -380,11 +393,11 @@ requires HaveGeneralType<Vec1,Vec2>
 auto operator+(const Vec1& v1, const Vec2& v2)
         -> general_vector_type_t<Vec1,Vec2>
 {    
-    auto res = zeros<general_type_t<Vec1,Vec2>>(v1);
+    general_vector_type_t<Vec1,Vec2> res(v1.size());
     auto it = res.begin(), end = res.end();
     auto it1 = v1.begin();
     auto it2 = v2.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 + *it2;
         ++it;   ++it1;  ++it2;
     }
@@ -404,9 +417,10 @@ requires std::is_rvalue_reference_v<decltype(v1)>
 
 template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsSecondOrBoth<Vec1,Vec2>
-auto operator+(const Vec1& v1, Vec2&& v2)
+auto operator+(Vec1&& v1, Vec2&& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec2>>
 requires std::is_rvalue_reference_v<decltype(v2)>
+&& std::is_lvalue_reference_v<decltype(v1)>
 {
     return std::move(v2) + v1;
 }
@@ -418,7 +432,7 @@ requires std::convertible_to<T,
                              basic_value_type_t<Vec> >
 Vec& operator+=(Vec& v, const T& value) {
     auto it = v.begin(), end = v.end();
-    while (it != end) {
+    while (it < end) {
         *it += value;
         ++it;
     }
@@ -430,10 +444,10 @@ requires HaveGeneralType<Vec,T>
 auto operator+(const Vec& vec, const T& value)
         -> vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>>
 {
-    auto res = zeros<general_type_t<T,Vec>>(vec);
+    vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>> res(vec.size());
     auto it  = res.begin(), end = res.end();
     auto it1 = vec.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 + value;
         ++it;   ++it1;
     }
@@ -455,9 +469,8 @@ template <VectorLike Vec, NotVectorLike T>
 requires HaveGeneralType<T,Vec>
 auto operator+(const T& value, Vec&& v)
         -> vector_t<general_type_t<T,Vec>,vector_dim_v<Vec>>
-requires std::is_rvalue_reference_v<decltype(v)>
 {
-    return std::move(v) + value;
+    return std::forward<Vec>(v) + value;
 }
 
 
@@ -472,7 +485,7 @@ requires std::convertible_to<basic_value_type_t<Vec2>,
 Vec1& operator-=(Vec1& v1, const Vec2& v2) {
     auto it = v1.begin(), end = v1.end();
     auto it1 = v2.begin();
-    while (it != end) {
+    while (it < end) {
         *it -= *it1;
         ++it;   ++it1;
     }
@@ -484,11 +497,11 @@ requires HaveGeneralType<Vec1,Vec2>
 auto operator-(const Vec1& v1, const Vec2& v2)
         -> general_vector_type_t<Vec1,Vec2>
 {
-    auto res = zeros<general_type_t<Vec1,Vec2>>(v1);
+    general_vector_type_t<Vec1,Vec2> res(v1.size());
     auto it = res.begin(), end = res.end();
     auto it1 = v1.begin();
     auto it2 = v2.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 - *it2;
         ++it;   ++it1;  ++it2;
     }
@@ -508,14 +521,15 @@ requires std::is_rvalue_reference_v<decltype(v1)>
 
 template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsSecondOrBoth<Vec1,Vec2>
-auto operator-(const Vec1& v1, Vec2&& v2)
+auto operator-(Vec1&& v1, Vec2&& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec2>>
 requires std::is_rvalue_reference_v<decltype(v2)>
+&& std::is_lvalue_reference_v<decltype(v1)>
 {
     std::remove_const_t<std::remove_reference_t<Vec2>> res = std::move(v2);
     auto it = res.begin(), end = res.end();
     auto it1 = v1.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 - *it;
         ++it;   ++it1;
     }
@@ -529,7 +543,7 @@ requires std::convertible_to<T,
                              basic_value_type_t<Vec> >
 Vec& operator-=(Vec& v, const T& value) {
     auto it = v.begin(), end = v.end();
-    while (it != end) {
+    while (it < end) {
         *it -= value;
         ++it;
     }
@@ -541,10 +555,10 @@ requires HaveGeneralType<Vec,T>
 auto operator-(const Vec& vec, const T& value)
         -> vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>>
 {
-    auto res = zeros<general_type_t<T,Vec>>(vec);
+    vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>> res(vec.size());
     auto it  = res.begin(), end = res.end();
     auto it1 = vec.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 - value;
         ++it;   ++it1;
     }
@@ -556,10 +570,10 @@ requires HaveGeneralType<Vec,T>
 auto operator-(const T& value, const Vec& vec)
         -> vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>>
 {
-    auto res = zeros<general_type_t<T,Vec>>(vec);
+    vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>> res(vec.size());
     auto it  = res.begin(), end = res.end();
     auto it1 = vec.begin();
-    while (it != end) {
+    while (it < end) {
         *it = value - *it1;
         ++it;   ++it1;
     }
@@ -585,7 +599,7 @@ requires std::is_rvalue_reference_v<decltype(v)>
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::move(v);
     auto it = res.begin(), end = res.end();
-    while (it != end) {
+    while (it < end) {
         *it = value - *it;
         ++it;
     }
@@ -604,7 +618,7 @@ requires std::convertible_to<basic_value_type_t<Vec2>,
 Vec1& operator*=(Vec1& v1, const Vec2& v2) {
     auto it = v1.begin(), end = v1.end();
     auto it1 = v2.begin();
-    while (it != end) {
+    while (it < end) {
         *it *= *it1;
         ++it;   ++it1;
     }
@@ -616,11 +630,11 @@ requires HaveGeneralType<Vec1,Vec2>
 auto operator*(const Vec1& v1, const Vec2& v2)
         -> general_vector_type_t<Vec1,Vec2>
 {    
-    auto res = zeros<general_type_t<Vec1,Vec2>>(v1);
+    general_vector_type_t<Vec1,Vec2> res(v1.size());
     auto it = res.begin(), end = res.end();
     auto it1 = v1.begin();
     auto it2 = v2.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 * *it2;
         ++it;   ++it1;  ++it2;
     }
@@ -640,9 +654,10 @@ requires std::is_rvalue_reference_v<decltype(v1)>
 
 template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsSecondOrBoth<Vec1,Vec2>
-auto operator*(const Vec1& v1, Vec2&& v2)
+auto operator*(Vec1&& v1, Vec2&& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec2>>
 requires std::is_rvalue_reference_v<decltype(v2)>
+&& std::is_lvalue_reference_v<decltype(v1)>
 {
     return std::move(v2) * v1;
 }
@@ -654,7 +669,7 @@ requires std::convertible_to<T,
                              basic_value_type_t<Vec> >
 Vec& operator*=(Vec& v, const T& value) {
     auto it = v.begin(), end = v.end();
-    while (it != end) {
+    while (it < end) {
         *it *= value;
         ++it;
     }
@@ -666,10 +681,10 @@ requires HaveGeneralType<Vec,T>
 auto operator*(const Vec& vec, const T& value)
         -> vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>>
 {
-    auto res = zeros<general_type_t<T,Vec>>(vec);
+    vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>> res(vec.size());
     auto it  = res.begin(), end = res.end();
     auto it1 = vec.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 * value;
         ++it;   ++it1;
     }
@@ -691,9 +706,8 @@ template <VectorLike Vec, NotVectorLike T>
 requires HaveGeneralType<T,Vec>
 auto operator*(const T& value, Vec&& v)
         -> vector_t<general_type_t<T,Vec>,vector_dim_v<Vec>>
-requires std::is_rvalue_reference_v<decltype(v)>
 {
-    return std::move(v) * value;
+    return std::forward<Vec>(v) * value;
 }
 
 
@@ -708,7 +722,7 @@ requires std::convertible_to<basic_value_type_t<Vec2>,
 Vec1& operator/=(Vec1& v1, const Vec2& v2) {
     auto it = v1.begin(), end = v1.end();
     auto it1 = v2.begin();
-    while (it != end) {
+    while (it < end) {
         *it /= *it1;
         ++it;   ++it1;
     }
@@ -720,11 +734,11 @@ requires HaveGeneralType<Vec1,Vec2>
 auto operator/(const Vec1& v1, const Vec2& v2)
         -> general_vector_type_t<Vec1,Vec2>
 {
-    auto res = zeros<general_type_t<Vec1,Vec2>>(v1);
+    general_vector_type_t<Vec1,Vec2> res(v1.size());
     auto it = res.begin(), end = res.end();
     auto it1 = v1.begin();
     auto it2 = v2.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 / *it2;
         ++it;   ++it1;  ++it2;
     }
@@ -744,14 +758,15 @@ requires std::is_rvalue_reference_v<decltype(v1)>
 
 template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsSecondOrBoth<Vec1,Vec2>
-auto operator/(const Vec1& v1, Vec2&& v2)
+auto operator/(Vec1&& v1, Vec2&& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec2>>
 requires std::is_rvalue_reference_v<decltype(v2)>
+&& std::is_lvalue_reference_v<decltype(v1)>
 {
     std::remove_const_t<std::remove_reference_t<Vec2>> res = std::move(v2);
     auto it = res.begin(), end = res.end();
     auto it1 = v1.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 / *it;
         ++it;   ++it1;
     }
@@ -765,7 +780,7 @@ requires std::convertible_to<T,
                              basic_value_type_t<Vec> >
 Vec& operator/=(Vec& v, const T& value) {
     auto it = v.begin(), end = v.end();
-    while (it != end) {
+    while (it < end) {
         *it /= value;
         ++it;
     }
@@ -777,10 +792,10 @@ requires HaveGeneralType<Vec,T>
 auto operator/(const Vec& vec, const T& value)
         -> vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>>
 {
-    auto res = zeros<general_type_t<T,Vec>>(vec);
+    vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>> res(vec.size());
     auto it  = res.begin(), end = res.end();
     auto it1 = vec.begin();
-    while (it != end) {
+    while (it < end) {
         *it = *it1 / value;
         ++it;   ++it1;
     }
@@ -792,10 +807,10 @@ requires HaveGeneralType<Vec,T>
 auto operator/(const T& value, const Vec& vec)
         -> vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>>
 {
-    auto res = zeros<general_type_t<T,Vec>>(vec);
+    vector_t<general_type_t<Vec,T>,vector_dim_v<Vec>> res(vec.size());
     auto it  = res.begin(), end = res.end();
     auto it1 = vec.begin();
-    while (it != end) {
+    while (it < end) {
         *it = value / *it1;
         ++it;   ++it1;
     }
@@ -821,7 +836,7 @@ requires std::is_rvalue_reference_v<decltype(v)>
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::move(v);
     auto it = res.begin(), end = res.end();
-    while (it != end) {
+    while (it < end) {
         *it = value / *it;
         ++it;
     }
@@ -834,18 +849,26 @@ requires std::is_rvalue_reference_v<decltype(v)>
 ==================================*/
 
 // operator<<
-template<typename T>
-std::ostream& operator<<(std::ostream& stream, const vector<T>& v) {
-    for (const T& x: v) {
-        stream << x << " ";
+template<VectorLike Vec>
+requires std::same_as<typename Vec::value_type
+                    , typename Vec::basic_value_type>
+std::ostream& operator<<(std::ostream& stream, const Vec& v) {
+    auto it = v.begin(), end = v.end();
+    while (it < end) {
+        stream << *it << " ";
+        ++it;
     }
     return stream;
 }
 // overloading to print vector Dim > 1 by rows
-template<typename T>
-std::ostream& operator<<(std::ostream& stream, const vector<vector<T>>& v) {
-    for (const vector<T>& x: v) {
-        stream << x << "\n";
+template<VectorLike Vec>
+std::ostream& operator<<(std::ostream& stream, const Vec& v) {
+    auto it = v.begin(), end = v.end();
+    while (it < end) {
+        stream << *it;
+        if ((*it).size())
+            stream << "\n";
+        ++it;
     }
     return stream;
 }

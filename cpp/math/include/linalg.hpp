@@ -1,7 +1,11 @@
-#include "vector.h"
+#pragma once
+#include "vector.hpp"
 #include <cmath>
+#include <numbers>
 
 namespace math {
+
+constexpr double pi = std::numbers::pi;
 
 /*==================================
 // Generate vector-like objects
@@ -99,8 +103,8 @@ auto repmat(const T& value, const Vec& v)
 
 // eye - vector_t<T,2> equal to zeros except of diagonal elements
 // which equal to 1
-template <typename T, size_t sz>
-vector_t<T,2> eye() {
+template <typename T>
+vector_t<T,2> eye(size_t sz) {
     vector_t<T,2> v = zeros<T>(sz,sz);
     for (size_t i = 0; i < sz; ++i) {
         v[i][i] = 1;
@@ -108,11 +112,6 @@ vector_t<T,2> eye() {
     return v;
 }
 
-template <typename T, size_t sz>
-requires (sz == 1)
-vector_t<T,1> eye() {
-    return vector_t<T,1>(1,1);
-}
 
 template <Matrix M>
 auto det_(const M& vec)
@@ -352,7 +351,79 @@ auto kron(const M1& m1, const M2& m2)
 }
 
 
+template <NotVectorLike T>
+auto cos(T value)
+        -> decltype(std::cos(value))
+{
+    return std::cos(value);
+}
 
+template <VectorLike Vec>
+auto cos(Vec&& vec)
+        -> std::remove_const_t<std::remove_reference_t<Vec>>
+{
+    std::remove_const_t<std::remove_reference_t<Vec>> res = std::forward<Vec>(vec);
+    auto it = res.begin(), end = res.end();
+    while (it != end) {
+        *it = cos(*it);
+        ++it;
+    }
+    return res;
+}
 
+template <NotVectorLike T>
+auto sin(T value)
+        -> decltype(std::sin(value))
+{
+    return std::sin(value);
+}
+
+template <VectorLike Vec>
+auto sin(Vec&& vec)
+        -> std::remove_const_t<std::remove_reference_t<Vec>>
+{
+    std::remove_const_t<std::remove_reference_t<Vec>> res = std::forward<Vec>(vec);
+    auto it = res.begin(), end = res.end();
+    while (it != end) {
+        *it = sin(*it);
+        ++it;
+    }
+    return res;
+}
+
+template <NotVectorLike T>
+vector_t<T, 1> linspace(T from, T to, size_t num) {
+    auto res = zeros<T>(num);
+    size_t cur = 0;
+    auto it = res.begin();
+    for (; cur < num; ++cur, ++it) {
+        *it = from + (to - from)*cur/(num-1);
+    }
+    return res;
+}
+
+template <std::input_iterator InputIt>
+requires requires(InputIt it) {
+    {*it * *it} -> std::convertible_to<double>;
+}
+double norm(InputIt first, InputIt last) {
+    double res = 0;
+    while (first < last) {
+        res += *first * *first;
+        ++first;
+    }
+    return std::sqrt(res);
+}
+
+template <VectorLike V>
+requires NotVectorLike<typename V::value_type>
+double norm(const V& vec) {
+    return norm(vec.begin(),vec.end());
+}
+
+template <Matrix M, Vector V>
+vector<double> solve(const M& A, const V& b) {
+    
+}
 
 } // namespace math 
