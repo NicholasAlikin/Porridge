@@ -1,7 +1,10 @@
 #pragma once
+
 #include "vector.hpp"
+#include "slice.hpp"
 #include <cmath>
 #include <numbers>
+#include <string>
 
 namespace math {
 
@@ -144,6 +147,8 @@ auto det_(const M& vec)
 
 }
 
+double det_(const vector_t<double,2>& mat);
+
 template <Matrix M>
 auto det(const M& mat)
         -> typename M::basic_value_type {
@@ -155,6 +160,31 @@ auto det(const M& mat)
     return det_(mat);
 }
 
+template <Vector V>
+auto sum(const V& vec)
+        -> typename V::basic_value_type
+{
+    typename V::basic_value_type res = 0;
+    auto it = vec.begin(), end = vec.end();
+    while (it < end) {
+        res += *it;
+        ++it;
+    }
+    return res;
+}
+
+template <Vector V>
+auto product(const V& vec)
+        -> typename V::basic_value_type
+{
+    typename V::basic_value_type res = 1;
+    auto it = vec.begin(), end = vec.end();
+    while (it < end) {
+        res *= *it;
+        ++it;
+    }
+    return res;
+}
 
 template <Matrix M1, ArithmeticVectorsLike<M1> M2>
 auto dot(const M1& mat1, const M2& mat2)
@@ -183,7 +213,13 @@ auto dot(const M& mat, const V& vec)
         -> vector_t<general_type_t<M,V>,1> {
     auto sz_mat = size(mat);
     if (sz_mat[1] != vec.size()) {
-        throw std::logic_error("Cannot calculate dot(mat,vec)! Incorrect matrix or vector shape!");
+        throw std::logic_error(std::string("Cannot calculate dot(mat[")
+                             + std::to_string(sz_mat[0])
+                             + std::string(",")
+                             + std::to_string(sz_mat[1])
+                             + std::string("], vec[")
+                             + std::to_string(vec.size())
+                             + std::string("])! Incorrect matrix or vector shape!"));
     }
     auto res = zeros<general_type_t<M,V>>(sz_mat[0]);
     size_t i,j;
@@ -364,7 +400,7 @@ auto cos(Vec&& vec)
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::forward<Vec>(vec);
     auto it = res.begin(), end = res.end();
-    while (it != end) {
+    while (it < end) {
         *it = cos(*it);
         ++it;
     }
@@ -384,7 +420,7 @@ auto sin(Vec&& vec)
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::forward<Vec>(vec);
     auto it = res.begin(), end = res.end();
-    while (it != end) {
+    while (it < end) {
         *it = sin(*it);
         ++it;
     }
@@ -421,9 +457,28 @@ double norm(const V& vec) {
     return norm(vec.begin(),vec.end());
 }
 
-template <Matrix M, Vector V>
-vector<double> solve(const M& A, const V& b) {
-    
+
+vector<double> solve(const vector_t<double,2>& A, const vector<double>& b);
+vector<double> psolve(const vector_t<double,2>& A, const vector<double>& b);
+
+void LDLT(const vector_t<double,2>& K, vector<double>& D, vector_t<double,2>& L);
+void gauss_backward_triup(vector<double>& x, const vector_t<double,2>& A, const vector<double>& b);
+void gauss_backward_tridown(vector<double>& x, const vector_t<double,2>& A, const vector<double>& b);
+
+vector_t<double,2> pinv(const vector_t<double,2>& A);
+
+template <Matrix M>
+M transpose(const M& A) {
+    M AT = zeros<typename M::basic_value_type>(A);
+    for (size_t i = 0; i < A.size(); ++i) {
+        AT[i][i] = A[i][i];
+        for (size_t j = i+1; j < A.size(); ++j) {
+            AT[i][j] = A[j][i];
+            AT[j][i] = A[i][j];
+        }
+    }
+    return AT;
 }
+
 
 } // namespace math 

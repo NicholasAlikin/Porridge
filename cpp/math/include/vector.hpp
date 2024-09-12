@@ -198,6 +198,9 @@ public:
     
     vector(size_t size, const T& value)   : v(size,value) {}//{ std::cout << "size_t, value\n";}
 
+    template <std::input_iterator InputIt>
+    vector(InputIt first, InputIt last) : v(first,last) {}
+
     ~vector() {}//{ std::cout << "~vector [" << *this << "]"<< std::endl; };
 
     vector<T>& operator=(const vector<T>&) &;

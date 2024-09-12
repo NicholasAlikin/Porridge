@@ -32,6 +32,7 @@ public:
     int exitflag = 0;
     double _dy_norm = 0, _fun_norm = 0;
     double _epsx = 1e-5, _epsf = 1e-5;
+    double _dx = 1e-5;
     size_t _max_iter = 20;
 
     Matrix_t mass;
@@ -62,8 +63,11 @@ private:
     void process_exitflag(const Vector_t& dy, const Vector_t& fun);
     void printiter();
 
-    void correction_sub_iteration(const Vector_t& y, const Vector_t& dy, const Vector_t& fun, const Matrix_t& jac);
-    void correction_system_response(const Vector_t& fun, const Matrix_t& jac, const Vector_t& y);
+    void correction_sub_iteration(const Vector_t& y, const Vector_t& dy, Vector_t& fun, Matrix_t& jac);
+    void continuation_sub_iteration(const Vector_t& y, const Vector_t& dy, const Vector_t& Dy, Vector_t& fun, Matrix_t& jac);
+    
+    virtual void correction_system_response(Vector_t& fun, Matrix_t& jac, const Vector_t& y) {};
+    virtual void continuation_system_response(Vector_t& fun, Matrix_t& jac, const Vector_t& y, const Vector_t& Dy);
     
 
 public:
@@ -72,12 +76,25 @@ public:
     Vector_t correction(const Vector_t& predictor); // virtual ???
     Vector_t continuation(const Vector_t& predictor, const Vector_t& previous); // virtual ???
 
-    Vector_t process_iteration(const Matrix_t& jac, const Vector_t& fun);
+    virtual Vector_t process_iteration(const Matrix_t& jac, const Vector_t& fun);
     
     
-    void correction_total_increment(const Vector_t& y, const Vector_t& dy);
+    virtual void correction_total_increment(Vector_t& y, const Vector_t& dy);
+    void continuation_total_increment(Vector_t& Dy, const Vector_t& dy, const Vector_t& predictor);
     
 };
 
+
+class NormalFlow: public Corrector {
+public:
+    void correction_total_increment(Vector_t& y, const Vector_t& dy) override;
+    Vector_t process_iteration(const Matrix_t& jac, const Vector_t& fun) override;
+
+};
+
+// class ArcLength: public Corrector {
+// public:
+
+// };
 
 } // namespace math
