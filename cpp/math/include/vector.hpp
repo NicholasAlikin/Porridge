@@ -213,6 +213,10 @@ public:
     const T& operator[](size_t) const &;
     T&& operator[](size_t) &&;
     const T&& operator[](size_t) const &&;
+    T& last() &;
+    const T& last() const &;
+    T&& last() &&;
+    const T&& last() const &&;
 
     // auto&& operator[](this auto&& self, size_t pos) {
     //     return std::forward_like<decltype(self)>(self.v[pos])
@@ -230,6 +234,7 @@ public:
     template <typename... Args>
     void emplace_back(Args&&...); // universal reference
 
+    
 
 
 };
@@ -245,35 +250,35 @@ public:
 
 template <typename T>
 size_t vector<T>::size() const {
-    return this->v.size();
+    return v.size();
 }
 
 template <typename T>
 void vector<T>::push_back(const T& value) {
-    this->v.push_back(value);
+    v.push_back(value);
 }
 template <typename T>
 void vector<T>::push_back(T&& value) {
-    this->v.push_back(std::move(value));
+    v.push_back(std::move(value));
 }
 
 template <typename T>
 template <typename... Args>
 void vector<T>::emplace_back(Args&&... args) {
-    this->v.emplace_back(std::forward<Args>(args)...);
+    v.emplace_back(std::forward<Args>(args)...);
 }
 
 // operator=
 
 template <typename T>
 vector<T>& vector<T>::operator=(const vector<T>& other) & {
-    this->v = other.v;
+    v = other.v;
     return *this;
 }
 
 template <typename T>
 vector<T>& vector<T>::operator=(vector<T>&& other) & {
-    this->v = std::move(other.v);
+    v = std::move(other.v);
     return *this;
 }
 
@@ -307,52 +312,68 @@ const T&& vector<T>::operator[](size_t pos) const && {
     return std::move(v[pos]);
 }
 
-
 // template <typename T>
 // auto&& vector<T>::operator[](this auto&& self, size_t pos) {
 //     return std::forward_like<decltype(self)>(v[pos]);
 // }
 
 template <typename T>
+T& vector<T>::last() & {
+    return v[size()-1];
+}
+template <typename T>
+const T& vector<T>::last() const & {
+    return v[size()-1];
+}
+template <typename T>
+T&& vector<T>::last() && {
+    return std::move(v[size()-1]);
+}
+template <typename T>
+const T&& vector<T>::last() const && {
+    return std::move(v[size()-1]);
+}
+
+template <typename T>
 T& vector<T>::at(size_t pos) {
-    return this->v.at(pos);
+    return v.at(pos);
 }
 
 template <typename T>
 const T& vector<T>::at(size_t pos) const {
-    return this->v.at(pos);
+    return v.at(pos);
 }
 
 // get iterator methods
 
 template<typename T>
 constexpr typename vector<T>::iterator vector<T>::begin() {
-    return this->v.begin();
+    return v.begin();
 } 
 
 template<typename T>
 constexpr typename vector<T>::const_iterator vector<T>::begin() const {
-    return this->v.begin();
+    return v.begin();
 }
 
 template<typename T>
 constexpr typename vector<T>::const_iterator vector<T>::cbegin() const {
-    return this->v.cbegin();
+    return v.cbegin();
 } 
 
 template<typename T>
 constexpr typename vector<T>::iterator vector<T>::end() {
-    return this->v.end();
+    return v.end();
 } 
 
 template<typename T>
 constexpr typename vector<T>::const_iterator vector<T>::end() const {
-    return this->v.end();
+    return v.end();
 }
 
 template<typename T>
 constexpr typename vector<T>::const_iterator vector<T>::cend() const {
-    return this->v.cend();
+    return v.cend();
 }
 
 
