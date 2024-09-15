@@ -2,7 +2,9 @@
 #include "slice.hpp"
 #include "harmonic_balance.hpp"
 #include <functional>
-
+#include "predictor.hpp"
+#include "continuation.hpp"
+#include <iomanip>
 using namespace math;
 
 
@@ -24,7 +26,7 @@ Vector_t funcnl(const Vector_t& x, double w, const DFT& dft, double f0) {
     Vector_t x_time = dot(dft.backward,f0*x);
     Vector_t dxdt_time = dot(dft.backward,dot(dft.derivative,f0*w*x));
     Vector_t fnl = x_time*x_time*x_time;
-    return dot(dft.forward, fnl);
+    return dot(dft.forward, fnl)*0;
 }
 
 Vector_t funcex(double w, const DFT& dft, double f0) {
@@ -32,30 +34,37 @@ Vector_t funcex(double w, const DFT& dft, double f0) {
     f[1] = f0;
     return f;
 }
-
+// " ./exe | tee file.log " - output to stdout and file.log
 int main() {
-
+    
     /*Matrix_t K = {{ 5,-4, 1, 0}
                  ,{-4, 6,-4, 1}
                  ,{ 1,-4, 6,-4}
                  ,{ 0, 1,-4, 5}};
     Vector_t f = {0,1,0,0};
-    // vector<double> D(K.size());
-    // auto L = K;
-    // LDLT(K,D,L);
-    // std::cout << D << '\n' << L << '\n' << transpose(L);
-    std::cout << solve(K,f);*/
-    int n = 20;
-    auto m1 = eye<int>(n);
-    auto m2 = eye<double>(n);
-    std::cout << det(m2) << std::endl;
-    std::cout << det(m1) << std::endl;
+    vector<double> D(K.size());
+    auto L = K;
+    LDLT(K,D,L);
+    auto Dm = eye<double>(K.size());
+    auto Dm_inv = eye<double>(K.size());
+    for (size_t i = 0; i < D.size(); ++i) {
+        Dm[i][i] = D[i];
+        Dm_inv[i][i] = 1.0/D[i];
+    }
 
-    /*Matrix_t m = {{ 1   }};
+    // std::cout << dot(transpose(L),dot(Dm,L)) - K;
+    Matrix_t K_inv = dot(transpose(L),dot(Dm_inv,L));
+    std::cout << dot(K,K_inv) << dot(K_inv,K);*/
+
+    // std::cout << D << '\n' << L << '\n' << transpose(L);
+    // std::cout << solve(K,f);
+    
+
+    Matrix_t m = {{ 1   }};
     Matrix_t d = {{ 0.1 }};
     Matrix_t k = {{ 1   }};
     size_t H = 3, N = 64, ndof = 1;
-    double w = 3, T = 2*pi/w;
+    double w = 0.4;//, T = 2*pi/w;
     // double dt = T/N;
     // auto t = linspace<double>(0,T-dt,N);
     
@@ -70,12 +79,29 @@ int main() {
             [fex0](double w, const DFT& dft) { return funcex(w,dft,fex0); } );
     
     Vector_t y0 = zeros<double>((2*H+1)*ndof+1);
-    y0[y0.size()-1] = w;
+    Vector_t x0((2*H+1)*ndof);
+    
+    y0.last() = w;
+    // y0[1] = -0.1;
+    std::cout << std::setprecision(3) << std::scientific;
     // std::cout << hbm.linear_system_dynamic_reaction(w);
-    auto y = hbm.correction(y0);
-    Slice x(y.begin(),y.end()-1,1);
-    std::cout << y << norm(x);*/
+    Secant secant(y0.size());
+    Continuation<HBM,Secant> nc(hbm,secant);
+    double w_start = 0.2, w_end = 2, ds = 0.05;
+    nc.process<corrector_methods::ArcLengthCorrector>(x0,w_start,w_end,ds);
+    
+    // auto y = hbm.process(y0);
+    // std::cout << '\n';
+    // double ds = 0.1;
+    // secant.calc_predictor(y,ds);
+    // auto y2 = hbm.process<corrector_methods::ArcLengthCorrector>(secant.predictor,y, ds);
+    // std::cout << '\n';
 
+    // Slice x(y.begin(),y.end()-1);
+    // Slice x2(y2.begin(),y2.end()-1);
+
+    // std::cout << y  << norm(x) << '\n';
+    // std::cout << y2 << norm(x2) << '\n';
     
 
 

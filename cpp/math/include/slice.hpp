@@ -40,10 +40,9 @@ private:
 
 public:
     
-
-    Slice(const It1& from, const It2& to, it_difference_type step = 1)
-            : from(from), to(to), step_(step), sz(std::ceil(double(to-from)/step)) {};
-  
+    Slice() = default;
+    Slice(const It1& from, const It2& to, it_difference_type step = 1);
+    void new_slice(const It1& from, const It2& to, it_difference_type step = 1);
     
     size_t size() const;
     it_difference_type step() const;
@@ -59,6 +58,19 @@ public:
     Slice<It1,It2>& operator=(const Vec& other) &;
 };
 
+
+
+template <typename It1, typename It2>
+Slice<It1,It2>::Slice(const It1& from, const It2& to, it_difference_type step)
+        : from(from), to(to), step_(step), sz(std::ceil(double(to-from)/step)) {};
+
+template <typename It1, typename It2>
+void Slice<It1,It2>::new_slice(const It1& from_new, const It2& to_new, it_difference_type step_new) {
+    from = from_new;
+    to = to_new;
+    step_ = step_new;
+    sz = std::ceil(double(to-from)/step_);
+}
 
 template <typename It1, typename It2>
 size_t Slice<It1,It2>::size() const {

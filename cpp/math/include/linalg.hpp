@@ -469,7 +469,21 @@ vector_t<double,2> pinv(const vector_t<double,2>& A);
 
 template <Matrix M>
 M transpose(const M& A) {
-    M AT = zeros<typename M::basic_value_type>(A);
+    auto sz_A = size(A);
+    if (sz_A[0] == sz_A[1])
+        return transpose_square(A);
+
+    M AT = zeros<typename M::basic_value_type>(sz_A[1],sz_A[0]);
+    for (size_t i = 0; i < sz_A[0]; ++i) {
+        for (size_t j = 0; j < sz_A[1]; ++j) {
+            AT[j][i] = A[i][j];
+        }
+    }
+    return AT;
+}
+template <Matrix M>
+M transpose_square(const M& A) {
+    M AT = zeros<typename M::basic_value_type>(A.size(),A.size());
     for (size_t i = 0; i < A.size(); ++i) {
         AT[i][i] = A[i][i];
         for (size_t j = i+1; j < A.size(); ++j) {
@@ -479,6 +493,5 @@ M transpose(const M& A) {
     }
     return AT;
 }
-
 
 } // namespace math 

@@ -7,7 +7,7 @@ set (VERSION_MINOR 0)
 set (VERSION "${VERSION_MAJOR}.${VERSION_MINOR}")
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++23 -Wall -O2")
-
+# -fsanitize=address
 file (GLOB
             CPP_SOURCES "source/*.cpp")
 
