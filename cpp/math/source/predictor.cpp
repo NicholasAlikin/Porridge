@@ -19,15 +19,15 @@ void Predictor::process_initialization() {
 Secant::Secant(size_t size): Predictor(size), previous(zeros<double>(size)) {}
 
 void Secant::calc_predictor(const Vector_t& y, double ds) {
-    // Vector_t prev = y - std::move(previous);
+    Vector_t prev = y - std::move(previous);
     
-    // double prev_norm = norm(prev);
-    // predictor = std::move(prev);
-    // predictor *= ds/prev_norm;
+    double prev_norm = norm(prev);
+    predictor = std::move(prev);
+    predictor *= ds/prev_norm;
     
-    // previous = y;
+    previous = y;
 
-    predictor.last() = ds;
+    // predictor.last() = ds;
 }
 
 void Secant::process_initialization() {

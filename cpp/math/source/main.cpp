@@ -26,7 +26,7 @@ Vector_t funcnl(const Vector_t& x, double w, const DFT& dft, double f0) {
     Vector_t x_time = dot(dft.backward,f0*x);
     Vector_t dxdt_time = dot(dft.backward,dot(dft.derivative,f0*w*x));
     Vector_t fnl = x_time*x_time*x_time;
-    return dot(dft.forward, fnl)*0;
+    return dot(dft.forward, fnl);
 }
 
 Vector_t funcex(double w, const DFT& dft, double f0) {
@@ -35,7 +35,7 @@ Vector_t funcex(double w, const DFT& dft, double f0) {
     return f;
 }
 // " ./exe | tee file.log " - output to stdout and file.log
-int main() {
+int main(int argc, char* argv[]) {
     
     /*Matrix_t K = {{ 5,-4, 1, 0}
                  ,{-4, 6,-4, 1}
@@ -51,13 +51,20 @@ int main() {
         Dm[i][i] = D[i];
         Dm_inv[i][i] = 1.0/D[i];
     }
+    Matrix_t L1,U1;
+    LU(K,L1,U1);
+    Matrix_t invL = invUpTri(U1);
+    std::cout << dot(U1,invL);
+    std::cout << dot(invL,U1);
+    K = eye<double>(50);
+    auto invK = inv(K);
+    auto pinvK = pinv(K);
+    std::cout << invK - pinvK;
+    std::cout << dot(L,dot(Dm,transpose(L))) - K;
+    std::cout << dot(L1,U1) - K;
 
-    // std::cout << dot(transpose(L),dot(Dm,L)) - K;
-    Matrix_t K_inv = dot(transpose(L),dot(Dm_inv,L));
-    std::cout << dot(K,K_inv) << dot(K_inv,K);*/
-
-    // std::cout << D << '\n' << L << '\n' << transpose(L);
-    // std::cout << solve(K,f);
+    std::cout << D << '\n' << L << '\n' << transpose(L);
+    std::cout << solve(K,f);*/
     
 
     Matrix_t m = {{ 1   }};
@@ -87,21 +94,31 @@ int main() {
     // std::cout << hbm.linear_system_dynamic_reaction(w);
     Secant secant(y0.size());
     Continuation<HBM,Secant> nc(hbm,secant);
-    double w_start = 0.2, w_end = 2, ds = 0.05;
-    nc.process<corrector_methods::ArcLengthCorrector>(x0,w_start,w_end,ds);
-    
-    // auto y = hbm.process(y0);
-    // std::cout << '\n';
-    // double ds = 0.1;
-    // secant.calc_predictor(y,ds);
-    // auto y2 = hbm.process<corrector_methods::ArcLengthCorrector>(secant.predictor,y, ds);
-    // std::cout << '\n';
+    double w_start = 0.0, w_end = 0.0, ds = 0.0;
+    double arclen_min = 0.0001, arclen_max = 0.1, arclen_inc = 2.0;
+    size_t successful_steps_max = 10;
+    if (parse_program_options(argc, argv, ds, w_start, w_end)) {
+    // std::cout << ds << ' ' << w_start << ' ' << w_end << '\n';
+    // std::cout << ds << std::endl;
 
-    // Slice x(y.begin(),y.end()-1);
-    // Slice x2(y2.begin(),y2.end()-1);
+    nc.process<corrector_methods::NormalFlowCorrector>(x0,w_start,w_end,ds,true
+                                                        ,arclen_min,arclen_max,arclen_inc
+                                                        ,successful_steps_max);
+    }
 
-    // std::cout << y  << norm(x) << '\n';
-    // std::cout << y2 << norm(x2) << '\n';
+
+    /*auto y = hbm.process(y0);
+    std::cout << '\n';
+    double ds = 0.1;
+    secant.calc_predictor(y,ds);
+    auto y2 = hbm.process<corrector_methods::ArcLengthCorrector>(secant.predictor,y, ds);
+    std::cout << '\n';
+
+    Slice x(y.begin(),y.end()-1);
+    Slice x2(y2.begin(),y2.end()-1);
+
+    std::cout << y  << norm(x) << '\n';
+    std::cout << y2 << norm(x2) << '\n';*/
     
 
 

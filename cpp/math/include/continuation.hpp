@@ -19,6 +19,7 @@ public:
     double _ds;
     int exitflag;
     size_t processiter;
+    size_t _successful_steps;
 
 
 
@@ -27,7 +28,11 @@ public:
 
     template <typename ParMethod>
     requires ParMethod::do_continuation
-    void process(const Vector_t& x0, double param_start, double param_end, double ds0);
+    void process(const Vector_t& x0, double param_start, double param_end, double ds0
+        , bool if_printiter, double arclen_min=1e-4, double arclen_max=1.0, double arclen_inc=2.0
+        , size_t successful_steps_max=10);
+    
+    void process_sub_iteration(const Vector_t& y, Matrix_t& Y, Matrix_t& Ynorm, double param_end, bool if_printiter);
     
     void process_initialization(double param_start, double param_end, double ds0);
 
@@ -35,9 +40,12 @@ public:
     Vector_t zeros_iteration(const Vector_t& x0,double param_start);
     
     void process_exitflag(double param, double param_end);
-    void printiter(const Vector_t& ynorm, double param);
+    void printiter(const Vector_t& ynorm, double param, bool if_printiter);
     Vector_t calculate_response_norm(const Vector_t& y, size_t ndof);
     void process_end_message();
+    void step_update(double arclen_min, double arclen_max, double arclen_inc
+                    ,size_t successful_steps_max);
+    bool is_correct_solution(const Vector_t& y, const Matrix_t& Y);
 };
 
 
@@ -53,33 +61,37 @@ Continuation<Method,Pred>::Continuation(const Method& method, const Pred& predic
 template <typename Method, typename Pred>
 template <typename ParMethod>
 requires ParMethod::do_continuation
-void Continuation<Method,Pred>::process(const Vector_t& x0, double param_start, double param_end, double ds0) {
+void Continuation<Method,Pred>::process(const Vector_t& x0, double param_start, double param_end, double ds0
+                , bool if_printiter, double arclen_min, double arclen_max, double arclen_inc
+                , size_t successful_steps_max) {
     process_initialization(param_start,param_end,ds0);
 
     Matrix_t Y, Ynorm;
     Vector_t y = zeros_iteration<ParMethod>(x0,param_start);
+    Vector_t ynorm;
+
+    process_sub_iteration(y,Y,Ynorm,param_end,if_printiter);
+    while (exitflag == EXITFLAG::OK) {
+        ++processiter;
+        y = method.template process<ParMethod>(predictor.predictor,y,_ds);
+        
+        process_sub_iteration(y,Y,Ynorm,param_end,if_printiter);
+        step_update(arclen_min,arclen_max,arclen_inc,successful_steps_max);
+    }
+    process_end_message();
+
+}
+
+template <typename Method, typename Pred>
+void Continuation<Method,Pred>::process_sub_iteration(const Vector_t& y, Matrix_t& Y, Matrix_t& Ynorm, double param_end, bool if_printiter) {
     Vector_t ynorm = calculate_response_norm(y,method.ndof);
+    
     Y.push_back(y);
     Ynorm.push_back(ynorm);
 
     predictor.calc_predictor(y,_ds);
     process_exitflag(y.last(), param_end);
-    printiter(ynorm,y.last());
-    while (exitflag == EXITFLAG::OK) {
-        ++processiter;
-        y = method.template process<ParMethod>(predictor.predictor,y,_ds);
-        
-        ynorm = calculate_response_norm(y,method.ndof);
-        
-        Y.push_back(y);
-        Ynorm.push_back(ynorm);
-        predictor.calc_predictor(y,_ds);
-        
-        process_exitflag(y.last(), param_end);
-        printiter(ynorm,y.last());
-    }
-    process_end_message();
-
+    printiter(ynorm,y.last(),if_printiter);
 }
 
 template <typename Method, typename Pred>
@@ -88,6 +100,7 @@ void Continuation<Method,Pred>::process_initialization(double param_start, doubl
     processiter = 0;
     method.global_iter = 0;
     predictor.process_initialization();
+    _successful_steps = 0;
 }
 
 
@@ -127,7 +140,8 @@ void Continuation<Method,Pred>::process_exitflag(double param, double param_end)
 }
 
 template <typename Method, typename Pred>
-void Continuation<Method,Pred>::printiter(const Vector_t& ynorm, double param) {
+void Continuation<Method,Pred>::printiter(const Vector_t& ynorm, double param, bool if_printiter) {
+    if (if_printiter)
     std::cout 
             //   << "Iter: " << processiter
             //   << ", corr iter: " << method.iter
@@ -141,9 +155,46 @@ void Continuation<Method,Pred>::printiter(const Vector_t& ynorm, double param) {
 
 template <typename Method, typename Pred>
 void Continuation<Method,Pred>::process_end_message() {
-    std::cout << "Finished with exitflag: " << exitflag
+    std::cout << "# Finished with exitflag: " << exitflag
               << ". Total number of corrector iterations: " << method.global_iter
               << "." << std::endl;
+}
+
+template <typename Method, typename Pred>
+void Continuation<Method,Pred>::step_update(double arclen_min, double arclen_max, double arclen_inc
+                                        ,size_t successful_steps_max) {
+    if ((_ds  > arclen_min)
+     && (method.exitflag == EXITFLAG::MAX_ITER))
+    {
+        _ds /= arclen_inc;
+        _successful_steps = 0;
+        std::cout << "# Arc-length step is decreased! New step size: "
+                  << _ds << std::endl;
+        return;
+    }
+
+    if ((_ds  < arclen_max)
+     && (method.exitflag == EXITFLAG::NORM_VAR_AND_FUN))
+    {
+        if (_successful_steps < successful_steps_max) {
+            ++_successful_steps;
+        } else {
+        _ds *= arclen_inc;
+        _successful_steps = 0;
+        std::cout << "# Arc-length step is increased! New step size: "
+                  << _ds << std::endl;
+        }
+        return;
+
+    }
+    // _successful_steps = 0;
+
+template <typename Method, typename Pred>
+bool Continuation<Method,Pred>::is_correcto_solution(const Vector_t& y, const Matrix_t& Y) {
+    if (processiter < 5) return true;
+
+    // TODO
+}
 }
 
 } // namespace math

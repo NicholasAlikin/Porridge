@@ -462,9 +462,11 @@ vector<double> solve(const vector_t<double,2>& A, const vector<double>& b);
 vector<double> psolve(const vector_t<double,2>& A, const vector<double>& b);
 
 void LDLT(const vector_t<double,2>& K, vector<double>& D, vector_t<double,2>& L);
+void LU(const vector_t<double,2>& K, vector_t<double,2>& L, vector_t<double,2>& U);
 void gauss_backward_triup(vector<double>& x, const vector_t<double,2>& A, const vector<double>& b);
 void gauss_backward_tridown(vector<double>& x, const vector_t<double,2>& A, const vector<double>& b);
 
+vector_t<double,2> inv(const vector_t<double,2>& A);
 vector_t<double,2> pinv(const vector_t<double,2>& A);
 
 template <Matrix M>
@@ -493,5 +495,10 @@ M transpose_square(const M& A) {
     }
     return AT;
 }
+
+vector_t<double,2> invLowTri(const vector_t<double,2>& A);
+vector_t<double,2> invUpTri(const vector_t<double,2>& A);
+vector_t<double,2> inv(const vector_t<double,2>& A);
+
 
 } // namespace math 

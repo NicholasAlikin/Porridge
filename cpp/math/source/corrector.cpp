@@ -68,7 +68,6 @@ Matrix_t BasicCorrector::get_init_jac(size_t y_size) {
 }
 
 Vector_t BasicCorrector::process_iteration(const Matrix_t& jac, const Vector_t& fun) {
-    // std::cout << "\nprocess_iteration\n" << fun << '\n' << jac << std::endl;
     return solve(jac,fun);
 }
 
@@ -101,7 +100,8 @@ void NormalFlowCorrector::process_total_increment(Vector_t& y, const Vector_t& d
     y += dy;
 }
 void NormalFlowCorrector::process_total_increment(Vector_t& Dy, const Vector_t& dy, const Vector_t& predictor, double ds) {
-    NormalFlowCorrector::process_total_increment(Dy,dy);
+    Dy += dy;
+    Dy *= ds/norm(Dy);
 }
 
 void NormalFlowCorrector::system_response(const Corrector& corrector, Vector_t& fun, Matrix_t& jac, const Vector_t& y) {
@@ -133,10 +133,8 @@ void ArcLengthCorrector::process_total_increment(Vector_t& Dy, const Vector_t& d
 
 void ArcLengthCorrector::system_response(const Corrector& corrector, Vector_t& fun, Matrix_t& jac, const Vector_t& y, const Vector_t& Dy, double ds) {
     corrector.system_response_ext(fun,jac, y);
-    // double Dy_norm = norm(Dy);
     fun.last() = -(dot(Dy,Dy) - ds*ds);
     jac.last() = 2*Dy;
-    // std::cout << '\n' << fun << '\n' << y <<"\n\n" << jac << std::endl;
 }
 
 

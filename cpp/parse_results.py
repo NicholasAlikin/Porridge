@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 if __name__ == "__main__":
     filename = r'E:\projects\Porridge\cpp\math\build\res.txt'
 
-    res = np.loadtxt(filename, comments='F')
+    res = np.loadtxt(filename, comments='#')
 
     fig, ax = plt.subplots()
 
