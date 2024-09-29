@@ -16,6 +16,10 @@ void Predictor::process_initialization() {
     }
 }
 
+void Predictor::resize_predictor(double ds) {
+    predictor *= ds;
+}
+
 Secant::Secant(size_t size): Predictor(size), previous(zeros<double>(size)) {}
 
 void Secant::calc_predictor(const Vector_t& y, double ds) {

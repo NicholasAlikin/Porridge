@@ -95,7 +95,7 @@ int main(int argc, char* argv[]) {
     Secant secant(y0.size());
     Continuation<HBM,Secant> nc(hbm,secant);
     double w_start = 0.0, w_end = 0.0, ds = 0.0;
-    double arclen_min = 0.0001, arclen_max = 0.1, arclen_inc = 2.0;
+    double arclen_min = 0.0001, arclen_max = 0.4, arclen_inc = 2.0;
     size_t successful_steps_max = 10;
     if (parse_program_options(argc, argv, ds, w_start, w_end)) {
     // std::cout << ds << ' ' << w_start << ' ' << w_end << '\n';

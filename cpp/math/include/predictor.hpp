@@ -14,6 +14,7 @@ public:
 
     void calc_predictor(double ds);
     void process_initialization();
+    void resize_predictor(double ds);
     
 };
 

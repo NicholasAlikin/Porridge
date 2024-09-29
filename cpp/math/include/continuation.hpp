@@ -20,6 +20,7 @@ public:
     int exitflag;
     size_t processiter;
     size_t _successful_steps;
+    size_t _count_not_correct_solution;
 
 
 
@@ -45,7 +46,9 @@ public:
     void process_end_message();
     void step_update(double arclen_min, double arclen_max, double arclen_inc
                     ,size_t successful_steps_max);
-    bool is_correct_solution(const Vector_t& y, const Matrix_t& Y);
+    bool decrease_step(double arclen_min, double arclen_inc);
+    bool increase_step(double arclen_max, double arclen_inc, size_t successful_steps_max);
+    bool is_correct_solution(const Vector_t& y, const Matrix_t& Y, double arclen_min, double arclen_inc);
 };
 
 
@@ -75,6 +78,8 @@ void Continuation<Method,Pred>::process(const Vector_t& x0, double param_start, 
         ++processiter;
         y = method.template process<ParMethod>(predictor.predictor,y,_ds);
         
+        if (!is_correct_solution(y,Y,arclen_min,arclen_inc)) continue;
+
         process_sub_iteration(y,Y,Ynorm,param_end,if_printiter);
         step_update(arclen_min,arclen_max,arclen_inc,successful_steps_max);
     }
@@ -101,6 +106,7 @@ void Continuation<Method,Pred>::process_initialization(double param_start, doubl
     method.global_iter = 0;
     predictor.process_initialization();
     _successful_steps = 0;
+    _count_not_correct_solution = 0;
 }
 
 
@@ -162,39 +168,68 @@ void Continuation<Method,Pred>::process_end_message() {
 
 template <typename Method, typename Pred>
 void Continuation<Method,Pred>::step_update(double arclen_min, double arclen_max, double arclen_inc
-                                        ,size_t successful_steps_max) {
-    if ((_ds  > arclen_min)
-     && (method.exitflag == EXITFLAG::MAX_ITER))
-    {
-        _ds /= arclen_inc;
-        _successful_steps = 0;
-        std::cout << "# Arc-length step is decreased! New step size: "
-                  << _ds << std::endl;
-        return;
-    }
-
-    if ((_ds  < arclen_max)
-     && (method.exitflag == EXITFLAG::NORM_VAR_AND_FUN))
-    {
-        if (_successful_steps < successful_steps_max) {
-            ++_successful_steps;
-        } else {
-        _ds *= arclen_inc;
-        _successful_steps = 0;
-        std::cout << "# Arc-length step is increased! New step size: "
-                  << _ds << std::endl;
-        }
-        return;
-
-    }
-    // _successful_steps = 0;
+                                            , size_t successful_steps_max) {
+    increase_step(arclen_max,arclen_inc,successful_steps_max);
+}
 
 template <typename Method, typename Pred>
-bool Continuation<Method,Pred>::is_correcto_solution(const Vector_t& y, const Matrix_t& Y) {
-    if (processiter < 5) return true;
+bool Continuation<Method,Pred>::decrease_step(double arclen_min, double arclen_inc) {
+    _successful_steps = 0;
 
-    // TODO
+    if (_ds  <= arclen_min)
+        return false;
+     
+    _ds /= arclen_inc;
+    std::cout << "# Arc-length step is decreased! New step size: "
+              << _ds << std::endl;
+    return true;
 }
+
+template <typename Method, typename Pred>
+bool Continuation<Method,Pred>::increase_step(double arclen_max, double arclen_inc, size_t successful_steps_max) {
+    if (_ds >= arclen_max)
+        return false;
+    if (_successful_steps < successful_steps_max) {
+        ++_successful_steps;
+        return false;
+    }
+
+    _ds *= arclen_inc;
+    _successful_steps = 0;
+    std::cout << "# Arc-length step is increased! New step size: "
+              << _ds << std::endl;
+    return true;
+
 }
+
+template <typename Method, typename Pred>
+bool Continuation<Method,Pred>::is_correct_solution(const Vector_t& y, const Matrix_t& Y
+            , double arclen_min, double arclen_inc)
+{
+    if (processiter < 2) return true;
+
+    int flag = EXITFLAG::OK;
+    if (method.exitflag == EXITFLAG::MAX_ITER) {
+        flag = EXITFLAG::MAX_ITER;
+    } else if ((norm(y-Y[Y.size()-2]) < method._epsx)) {
+        flag = EXITFLAG::PREV_POINT;
+    }
+
+    if (flag == EXITFLAG::OK) {
+        _count_not_correct_solution = 0;
+        return true;
+    }
+    
+
+    std::cout << "# Solution not found! FLAG " << flag << std::endl;
+    ++_count_not_correct_solution;
+    double ds_old = _ds;
+    if (decrease_step(arclen_min, arclen_inc)) 
+        predictor.resize_predictor(_ds/ds_old);
+
+
+    return false;
+}
+
 
 } // namespace math

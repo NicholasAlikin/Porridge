@@ -7,6 +7,7 @@ struct EXITFLAG {
     static const int NORM_VAR_AND_FUN = 1;
     static const int MAX_ITER = 2;
     static const int PARAM_END = 3;
+    static const int PREV_POINT = 4;
 
 };
 
@@ -14,8 +15,8 @@ struct EXEFLAG {
     static constexpr char HELP[] {"-h"};
     static constexpr char STEP[] {"-ds"};
     static constexpr char PRINT[] {"-print"};
-    static constexpr char PARAM_START[] {"-param0"};
-    static constexpr char PARAM_END[] {"-param1"};
+    static constexpr char PARAM_START[] {"-p0"};
+    static constexpr char PARAM_END[] {"-p1"};
     
 };
 
@@ -25,8 +26,8 @@ void print_exe_help() {
         << "Options:"
         << "\n\t-h\t\tDisplay this information"
         << "\n\t-ds\t\tSet continuation path step"
-        << "\n\t-param0\t\tSet begin parameter value"
-        << "\n\t-param1\t\tSet end parameter value"
+        << "\n\t-p0\t\tSet begin parameter value"
+        << "\n\t-p1\t\tSet end parameter value"
         << std::endl;
 }
 
