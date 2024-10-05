@@ -244,29 +244,7 @@ auto dot(const V1& vec1, const V2& vec2)
     return res;
 }
 
-/*template <NotVectorLike T>
-T&& abs(std::remove_reference_t<T>& value) {
-    if (value < 0)
-        value *= -1;
-    return std::forward<T>(value);
-}
 
-template <NotVectorLike T>
-T&& abs(std::remove_reference_t<T>&& value) {
-    if (value < 0)
-        value *= -1;
-    return std::forward<T>(value);
-}
-
-template <VectorLike V>
-V&& abs(V&& vec) {
-    auto it = vec.begin(), end = vec.end();
-    while (it != end) {
-        abs(*it);
-        ++it;
-    }
-    return std::forward<V>(vec);
-}*/
 
 
 template <Vector V1, ArithmeticVectorsLike<V1> V2>
@@ -388,17 +366,32 @@ auto kron(const M1& m1, const M2& m2)
 
 
 template <NotVectorLike T>
-auto cos(T value)
+auto cos(const T& value)
         -> decltype(std::cos(value))
 {
     return std::cos(value);
 }
 
-template <VectorLike Vec>
-auto cos(Vec&& vec)
-        -> std::remove_const_t<std::remove_reference_t<Vec>>
+template <VectorLike V>
+auto cos(const V& vec)
+        -> std::decay_t<V>
 {
-    std::remove_const_t<std::remove_reference_t<Vec>> res = std::forward<Vec>(vec);
+    std::decay_t<V> res = vec;
+    auto it = res.begin(), end = res.end();
+    auto it1 = vec.begin();
+    while (it < end) {
+        *it = cos(*it1);
+        ++it; ++it1;
+    }
+    return res;
+}
+
+template <VectorLike V>
+requires (!std::is_lvalue_reference_v<V>)
+auto cos(V&& vec)
+        -> std::remove_reference_t<V>
+{
+    std::remove_reference_t<V> res = std::move(vec);
     auto it = res.begin(), end = res.end();
     while (it < end) {
         *it = cos(*it);
@@ -407,21 +400,73 @@ auto cos(Vec&& vec)
     return res;
 }
 
+
+
 template <NotVectorLike T>
-auto sin(T value)
+auto sin(const T& value)
         -> decltype(std::sin(value))
 {
     return std::sin(value);
 }
 
-template <VectorLike Vec>
-auto sin(Vec&& vec)
-        -> std::remove_const_t<std::remove_reference_t<Vec>>
+template <VectorLike V>
+auto sin(const V& vec)
+        -> std::decay_t<V>
 {
-    std::remove_const_t<std::remove_reference_t<Vec>> res = std::forward<Vec>(vec);
+    std::decay_t<V> res = vec;
+    auto it = res.begin(), end = res.end();
+    auto it1 = vec.begin();
+    while (it < end) {
+        *it = sin(*it1);
+        ++it; ++it1;
+    }
+    return res;
+}
+
+template <VectorLike V>
+requires (!std::is_lvalue_reference_v<V>)
+auto sin(V&& vec)
+        -> std::remove_reference_t<V>
+{
+    std::remove_reference_t<V> res = std::move(vec);
     auto it = res.begin(), end = res.end();
     while (it < end) {
         *it = sin(*it);
+        ++it;
+    }
+    return res;
+}
+
+template <NotVectorLike T>
+auto tan(const T& value)
+        -> decltype(std::tan(value))
+{
+    return std::tan(value);
+}
+
+template <VectorLike V>
+auto tan(const V& vec)
+        -> std::decay_t<V>
+{
+    std::decay_t<V> res = vec;
+    auto it = res.begin(), end = res.end();
+    auto it1 = vec.begin();
+    while (it < end) {
+        *it = tan(*it1);
+        ++it; ++it1;
+    }
+    return res;
+}
+
+template <VectorLike V>
+requires (!std::is_lvalue_reference_v<V>)
+auto tan(V&& vec)
+        -> std::remove_reference_t<V>
+{
+    std::remove_reference_t<V> res = std::move(vec);
+    auto it = res.begin(), end = res.end();
+    while (it < end) {
+        *it = tan(*it);
         ++it;
     }
     return res;
@@ -457,6 +502,76 @@ double norm(const V& vec) {
     return norm(vec.begin(),vec.end());
 }
 
+template <NotVectorLike T>
+auto pow(const T& value, double n)
+        -> decltype(std::pow(value,n))
+{
+    return std::pow(value,n);
+}
+
+template <VectorLike V>
+auto pow(const V& vec, double n)
+        -> std::decay_t<V>
+{
+    std::decay_t<V> res = vec;
+    auto it = res.begin(), end = res.end();
+    auto it1 = vec.begin();
+    while (it < end) {
+        *it = pow(*it1,n);
+        ++it; ++it1;
+    }
+    return res;
+}
+
+template <VectorLike V>
+requires (!std::is_lvalue_reference_v<V>)
+auto pow(V&& vec, double n)
+        -> std::remove_reference_t<V>
+{
+    std::remove_reference_t<V> res = std::move(vec);
+    auto it = res.begin(), end = res.end();
+    while (it < end) {
+        *it = pow(*it,n);
+        ++it;
+    }
+    return res;
+}
+
+
+template <NotVectorLike T>
+auto abs(const T& value)
+        -> decltype(std::abs(value))
+{
+    return std::abs(value);
+}
+
+template <VectorLike V>
+auto abs(const V& vec)
+        -> std::decay_t<V>
+{
+    std::decay_t<V> res = vec;
+    auto it = res.begin(), end = res.end();
+    auto it1 = vec.begin();
+    while (it < end) {
+        *it = abs(*it1);
+        ++it; ++it1;
+    }
+    return res;
+}
+
+template <VectorLike V>
+requires (!std::is_lvalue_reference_v<V>)
+auto abs(V&& vec)
+        -> std::remove_reference_t<V>
+{
+    std::remove_reference_t<V> res = std::move(vec);
+    auto it = res.begin(), end = res.end();
+    while (it < end) {
+        *it = abs(*it);
+        ++it;
+    }
+    return res;
+}
 
 vector<double> solve(const vector_t<double,2>& A, const vector<double>& b);
 vector<double> psolve(const vector_t<double,2>& A, const vector<double>& b);
@@ -499,6 +614,8 @@ M transpose_square(const M& A) {
 vector_t<double,2> invLowTri(const vector_t<double,2>& A);
 vector_t<double,2> invUpTri(const vector_t<double,2>& A);
 vector_t<double,2> inv(const vector_t<double,2>& A);
+
+
 
 
 } // namespace math 
