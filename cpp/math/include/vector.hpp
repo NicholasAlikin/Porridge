@@ -8,6 +8,7 @@
 #include <type_traits>
 #include <concepts>
 
+
 namespace math {
 
 /*==================================
@@ -15,6 +16,11 @@ namespace math {
 ==================================*/
 template <typename T>
 class vector;
+
+template <typename It1, typename It2>
+requires std::same_as<typename It1::value_type
+                    , typename It2::value_type>
+class Slice;
 
 /*==================================
 // vector meta-functions and concepts
@@ -201,10 +207,15 @@ public:
     template <std::input_iterator InputIt>
     vector(InputIt first, InputIt last) : v(first,last) {}
 
+    vector(const Slice<iterator,iterator>& sl);
+    vector(const Slice<const_iterator,const_iterator>& sl);
+
     ~vector() {}//{ std::cout << "~vector [" << *this << "]"<< std::endl; };
 
     vector<T>& operator=(const vector<T>&) &;
     vector<T>& operator=(vector<T>&&) & ;
+    vector<T>& operator=(const Slice<iterator,iterator>&) &;
+    vector<T>& operator=(const Slice<const_iterator,const_iterator>&) &;
 
     template <ArithmeticVectorsLike<vector<T>> V2>
     vector<T>& operator=(const V2&) &;
@@ -239,6 +250,28 @@ public:
 
 };
 
+template <typename It1, typename It2>
+vector(const Slice<It1,It2>&) -> vector<typename It1::value_type>;
+
+template <typename T>
+vector<T>::vector(const Slice<iterator, iterator> &sl) : v(sl.size()) {
+    auto it_ = begin();
+    auto it1 = sl.begin(), end1 = sl.end();
+    while (it1 < end1) {
+        *it_ = *it1;
+        ++it_;   ++it1;
+    }
+}
+template <typename T>
+vector<T>::vector(const Slice<const_iterator, const_iterator> &sl) : v(sl.size()) {
+    auto it_ = begin();
+    auto it1 = sl.begin(), end1 = sl.end();
+    while (it1 < end1) {
+        *it_ = *it1;
+        ++it_;   ++it1;
+    }
+}
+
 
 /*==================================
 // class vector methods
@@ -268,6 +301,8 @@ void vector<T>::emplace_back(Args&&... args) {
     v.emplace_back(std::forward<Args>(args)...);
 }
 
+
+
 // operator=
 
 template <typename T>
@@ -285,13 +320,38 @@ vector<T>& vector<T>::operator=(vector<T>&& other) & {
 template <typename T>
 template <ArithmeticVectorsLike<vector<T>> V2>
 vector<T>& vector<T>::operator=(const V2& other) & {
-    auto it = this->begin(), end = this->end();
+    auto it = begin(), end_ = end();
     auto it1 = other.begin();
-    while (it < end) {
+    while (it < end_) {
         *it = *it1;
         ++it;   ++it1;
     }
+    return *this;
 };
+
+template <typename T>
+vector<T>& vector<T>::operator=(const Slice<iterator, iterator>& sl) & {
+    v = std::vector<T>(sl.size());
+    auto it = begin();
+    auto it1 = sl.begin(), end1 = sl.end();
+    while (it1 < end1) {
+        *it = *it1;
+        ++it; ++it1;
+    }
+    return *this;
+}
+
+template <typename T>
+vector<T>& vector<T>::operator=(const Slice<const_iterator, const_iterator>& sl) & {
+    v = std::vector<T>(sl.size());
+    auto it = begin();
+    auto it1 = sl.begin(), end1 = sl.end();
+    while (it1 < end1) {
+        *it = *it1;
+        ++it; ++it1;
+    }
+    return *this;
+}
 
 //operator[]
 
@@ -432,7 +492,7 @@ template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsFirstOrBoth<Vec1,Vec2>
 auto operator+(Vec1&& v1, const Vec2& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec1>>
-requires std::is_rvalue_reference_v<decltype(v1)>
+requires (!std::is_lvalue_reference_v<decltype(v1)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec1>> res = std::move(v1);
     res += v2;
@@ -443,7 +503,7 @@ template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsSecondOrBoth<Vec1,Vec2>
 auto operator+(Vec1&& v1, Vec2&& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec2>>
-requires std::is_rvalue_reference_v<decltype(v2)>
+requires (!std::is_lvalue_reference_v<decltype(v2)>)
 && std::is_lvalue_reference_v<decltype(v1)>
 {
     return std::move(v2) + v1;
@@ -482,7 +542,7 @@ template <VectorLike Vec, NotVectorLike T>
 requires GeneralTypeIsFirstOrBoth<Vec,T>
 auto operator+(Vec&& v, const T& value)
         -> std::remove_const_t<std::remove_reference_t<Vec>>
-requires std::is_rvalue_reference_v<decltype(v)>
+requires (!std::is_lvalue_reference_v<decltype(v)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::move(v);
     res += value;
@@ -536,7 +596,7 @@ template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsFirstOrBoth<Vec1,Vec2>
 auto operator-(Vec1&& v1, const Vec2& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec1>>
-requires std::is_rvalue_reference_v<decltype(v1)>
+requires (!std::is_lvalue_reference_v<decltype(v1)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec1>> res = std::move(v1);
     res -= v2;
@@ -547,7 +607,7 @@ template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsSecondOrBoth<Vec1,Vec2>
 auto operator-(Vec1&& v1, Vec2&& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec2>>
-requires std::is_rvalue_reference_v<decltype(v2)>
+requires (!std::is_lvalue_reference_v<decltype(v2)>)
 && std::is_lvalue_reference_v<decltype(v1)>
 {
     std::remove_const_t<std::remove_reference_t<Vec2>> res = std::move(v2);
@@ -608,7 +668,7 @@ template <VectorLike Vec, NotVectorLike T>
 requires GeneralTypeIsFirstOrBoth<Vec,T>
 auto operator-(Vec&& v, const T& value)
         -> std::remove_const_t<std::remove_reference_t<Vec>>
-requires std::is_rvalue_reference_v<decltype(v)>
+requires (!std::is_lvalue_reference_v<decltype(v)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::move(v);
     res -= value;
@@ -619,7 +679,7 @@ template <VectorLike Vec, NotVectorLike T>
 requires GeneralTypeIsSecondOrBoth<T,Vec>
 auto operator-(const T& value, Vec&& v)
         -> vector_t<general_type_t<T,Vec>,vector_dim_v<Vec>>
-requires std::is_rvalue_reference_v<decltype(v)>
+requires (!std::is_lvalue_reference_v<decltype(v)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::move(v);
     auto it = res.begin(), end = res.end();
@@ -669,7 +729,7 @@ template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsFirstOrBoth<Vec1,Vec2>
 auto operator*(Vec1&& v1, const Vec2& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec1>>
-requires std::is_rvalue_reference_v<decltype(v1)>
+requires (!std::is_lvalue_reference_v<decltype(v1)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec1>> res = std::move(v1);
     res *= v2;
@@ -680,7 +740,7 @@ template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsSecondOrBoth<Vec1,Vec2>
 auto operator*(Vec1&& v1, Vec2&& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec2>>
-requires std::is_rvalue_reference_v<decltype(v2)>
+requires (!std::is_lvalue_reference_v<decltype(v2)>)
 && std::is_lvalue_reference_v<decltype(v1)>
 {
     return std::move(v2) * v1;
@@ -719,7 +779,7 @@ template <VectorLike Vec, NotVectorLike T>
 requires GeneralTypeIsFirstOrBoth<Vec,T>
 auto operator*(Vec&& v, const T& value)
         -> std::remove_const_t<std::remove_reference_t<Vec>>
-requires std::is_rvalue_reference_v<decltype(v)>
+requires (!std::is_lvalue_reference_v<decltype(v)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::move(v);
     res *= value;
@@ -773,7 +833,7 @@ template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsFirstOrBoth<Vec1,Vec2>
 auto operator/(Vec1&& v1, const Vec2& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec1>>
-requires std::is_rvalue_reference_v<decltype(v1)>
+requires (!std::is_lvalue_reference_v<decltype(v1)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec1>> res = std::move(v1);
     res /= v2;
@@ -784,7 +844,7 @@ template <VectorLike Vec1, ArithmeticVectorsLike<Vec1> Vec2>
 requires GeneralTypeIsSecondOrBoth<Vec1,Vec2>
 auto operator/(Vec1&& v1, Vec2&& v2)
         -> std::remove_const_t<std::remove_reference_t<Vec2>>
-requires std::is_rvalue_reference_v<decltype(v2)>
+requires (!std::is_lvalue_reference_v<decltype(v2)>)
 && std::is_lvalue_reference_v<decltype(v1)>
 {
     std::remove_const_t<std::remove_reference_t<Vec2>> res = std::move(v2);
@@ -845,7 +905,7 @@ template <VectorLike Vec, NotVectorLike T>
 requires GeneralTypeIsFirstOrBoth<Vec,T>
 auto operator/(Vec&& v, const T& value)
         -> std::remove_const_t<std::remove_reference_t<Vec>>
-requires std::is_rvalue_reference_v<decltype(v)>
+requires (!std::is_lvalue_reference_v<decltype(v)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::move(v);
     res /= value;
@@ -856,7 +916,7 @@ template <VectorLike Vec, NotVectorLike T>
 requires GeneralTypeIsSecondOrBoth<T,Vec>
 auto operator/(const T& value, Vec&& v)
         -> vector_t<general_type_t<T,Vec>,vector_dim_v<Vec>>
-requires std::is_rvalue_reference_v<decltype(v)>
+requires (!std::is_lvalue_reference_v<decltype(v)>)
 {
     std::remove_const_t<std::remove_reference_t<Vec>> res = std::move(v);
     auto it = res.begin(), end = res.end();

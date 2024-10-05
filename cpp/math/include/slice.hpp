@@ -56,6 +56,8 @@ public:
 
     template <ArithmeticVectorsLike<vector<value_type>> Vec>
     Slice<It1,It2>& operator=(const Vec& other) &;
+
+    
 };
 
 
@@ -215,6 +217,9 @@ public:
     bool operator<=(const It& other) const {
         return it <= other;
     }
+
+    bool operator==(const base_iterator& other) const = delete;
+    bool operator==(const It& other) const = delete;
 };
 
 
