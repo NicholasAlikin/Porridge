@@ -56,6 +56,9 @@ public:
 
     template <ArithmeticVectorsLike<vector<value_type>> Vec>
     Slice<It1,It2>& operator=(const Vec& other) &;
+    
+    reference operator[](size_t pos);
+    const reference operator[](size_t pos) const;
 
     
 };
@@ -126,6 +129,18 @@ Slice<It1,It2>& Slice<It1, It2>::operator=(const Vec &other) & {
     return *this;
 }
 
+template <typename It1, typename It2>
+auto Slice<It1, It2>::operator[](size_t pos)
+        -> reference {
+    return from[pos*step_];
+}
+
+
+template <typename It1, typename It2>
+auto Slice<It1, It2>::operator[](size_t pos) const
+        -> const reference {
+    return from[pos*step_];
+}
 
 template <typename It1, typename It2>
 template <bool IsConst, typename It>
@@ -150,6 +165,7 @@ private:
     base_iterator(const It& it, difference_type step_): it(it), step_(step_) {};
 
 public:
+    base_iterator() = default;
     base_iterator(const base_iterator&) = default;
     
     operator base_iterator<true,It>() const {
@@ -198,6 +214,15 @@ public:
         res -= step_*n;
         return res;
     };
+
+    difference_type operator-(const base_iterator& other) const {
+        return it - other.it;
+    }
+
+    difference_type operator-(const It& other) const {
+        return it - other;
+    }
+
     bool operator<(const base_iterator& other) const {
         return it < other.it;
     };
