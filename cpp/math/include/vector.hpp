@@ -939,7 +939,8 @@ requires std::same_as<typename Vec::value_type
 std::ostream& operator<<(std::ostream& stream, const Vec& v) {
     auto it = v.begin(), end = v.end();
     while (it < end) {
-        stream << *it << " ";
+        if (*it >= 0) stream << ' ';
+        stream << *it << ' ';
         ++it;
     }
     return stream;
