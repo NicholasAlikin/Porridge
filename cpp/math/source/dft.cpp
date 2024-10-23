@@ -63,15 +63,103 @@ Matrix_t DFT::calculate_derivative(size_t H, size_t N, size_t ndof) {
 
 DFT::DFT(size_t H, size_t N, size_t ndof)
         : H(H), N(N), ndof(ndof)
-        // , forward_basic(DFT::calculate_forward_basic(H,N))
+        , forward_basic(DFT::calculate_forward_basic(H,N))
+        , backward_basic(DFT::calculate_backward_basic(H,N))
         , derivative_basic(DFT::calculate_derivative_basic(H,N))
         , derivative2_basic(DFT::calculate_derivative2_basic(derivative_basic))
-        , forward(DFT::calculate_forward(H,N,ndof))
-        , backward(DFT::calculate_backward(H,N,ndof))
-        , derivative(DFT::calculate_derivative(H,N,ndof))
-        // , derivative2(DFT::calculate_derivative2(H,N,ndof))
         {
 }
 
 
+Vector_t DFT::transform(const Matrix_t& transform_matrix, size_t res_size, const Vector_t& vec) const {
+    
+    Vector_t res = zeros<double>(res_size);
+    Slice<decltype(res.begin()),decltype(res.end())> sl_res;
+    Slice<decltype(vec.begin()),decltype(vec.end())> sl_vec;
+    
+    for (size_t dof = 0; dof < ndof; ++dof){
+        sl_res.new_slice(res.begin()+dof, res.end(), ndof);
+        sl_vec.new_slice(vec.begin()+dof, vec.end(), ndof);
+        dot(transform_matrix,sl_vec,sl_res);
+    }
+    return res;
+}
+
+Vector_t DFT::forward(const Vector_t& vec) const {
+    /*vec.size() == N ndof, res.size() == (2H+1)ndof*/
+    return transform(forward_basic,(2*H+1)*ndof,vec);
+}
+
+Vector_t DFT::backward(const Vector_t& vec) const {
+    /*vec.size() == (2H+1)ndof, res.size() == N ndof*/
+    return transform(backward_basic,N*ndof,vec);
+}
+
+void DFT::__derivative(Vector_t& res) const {
+    auto res_dof = res.begin();
+    Slice<decltype(res.begin()),decltype(res.end())> sl_cos, sl_sin;
+    decltype(sl_cos.begin()) it_cos,it_sin;
+    size_t h;
+    double tmp;
+    for (size_t dof = 0; dof < ndof; ++dof) {
+        *res_dof = 0;
+        h = 1;
+        sl_cos.new_slice(res_dof+1*ndof, res.end(), 2*ndof);
+        sl_sin.new_slice(res_dof+2*ndof, res.end(), 2*ndof);
+        it_cos = sl_cos.begin();
+        it_sin = sl_sin.begin();
+        while (h <= H) {
+            tmp = *it_cos;
+            *it_cos = (*it_sin)*h;
+            *it_sin = -tmp*h;
+            ++h; ++it_cos; ++it_sin;
+        }
+        ++res_dof;
+    }
+}
+
+
+Vector_t DFT::derivative(const Vector_t& vec) const {
+    Vector_t res = vec;
+    __derivative(res);
+    return res;
+}
+
+Vector_t DFT::derivative(Vector_t&& vec) const {
+    Vector_t res = std::move(vec);
+    __derivative(res);
+    return res;
+}
+
+void DFT::__derivative2(Vector_t& res) const {
+    auto res_dof = res.begin();
+    Slice<decltype(res.begin()),decltype(res.end())> sl_cos, sl_sin;
+    decltype(sl_cos.begin()) it_cos,it_sin;
+    size_t h;
+    for (size_t dof = 0; dof < ndof; ++dof) {
+        *res_dof = 0;
+        h = 1;
+        sl_cos.new_slice(res_dof+1*ndof, res.end(), 2*ndof);
+        sl_sin.new_slice(res_dof+2*ndof, res.end(), 2*ndof);
+        it_cos = sl_cos.begin();
+        it_sin = sl_sin.begin();
+        while (h <= H) {
+            (*it_cos) *= -h*h;
+            (*it_sin) *= -h*h;
+            ++h; ++it_cos; ++it_sin;
+        }
+        ++res_dof;
+    }
+}
+Vector_t DFT::derivative2(const Vector_t& vec) const {
+    Vector_t res = vec;
+    __derivative2(res);
+    return res;
+}
+
+Vector_t DFT::derivative2(Vector_t&& vec) const {
+    Vector_t res = std::move(vec);
+    __derivative2(res);
+    return res;
+}
 } // namespace math
