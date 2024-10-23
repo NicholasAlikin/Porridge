@@ -41,7 +41,7 @@ public:
     Vector_t zeros_iteration(const Vector_t& x0,double param_start);
     
     void process_exitflag(double param, double param_end);
-    void printiter(const Vector_t& ynorm, double param, bool if_printiter);
+    void printiter(const Vector_t& ynorm, double param, const Vector_t& y, bool if_printiter);
     Vector_t calculate_response_norm(const Vector_t& y, size_t ndof);
     void process_end_message();
     void step_update(double arclen_min, double arclen_max, double arclen_inc
@@ -96,7 +96,7 @@ void Continuation<Method,Pred>::process_sub_iteration(const Vector_t& y, Matrix_
 
     predictor.calc_predictor(y,_ds);
     process_exitflag(y.last(), param_end);
-    printiter(ynorm,y.last(),if_printiter);
+    printiter(ynorm,y.last(), y, if_printiter);
 }
 
 template <typename Method, typename Pred>
@@ -146,7 +146,7 @@ void Continuation<Method,Pred>::process_exitflag(double param, double param_end)
 }
 
 template <typename Method, typename Pred>
-void Continuation<Method,Pred>::printiter(const Vector_t& ynorm, double param, bool if_printiter) {
+void Continuation<Method,Pred>::printiter(const Vector_t& ynorm, double param, const Vector_t& y, bool if_printiter) {
     if (if_printiter)
     std::cout 
             //   << "Iter: " << processiter
@@ -154,7 +154,8 @@ void Continuation<Method,Pred>::printiter(const Vector_t& ynorm, double param, b
             //   << ", corr extflg: " << method.exitflag
             //   << ", {|y|}: [ " << ynorm << " ]"
             //   << ", param: " << param
-              << ynorm << ' ' << param
+              << ynorm << ' ' << param << "\n#" << y
+              << "\n#" << predictor.predictor
               << std::endl;
 
 }
