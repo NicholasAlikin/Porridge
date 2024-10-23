@@ -13,6 +13,7 @@ public:
     
     using value_type = typename It1::value_type;
     using reference = value_type&;
+    using const_reference = const value_type&;
     static const bool is_vector_like = true;
     using basic_value_type = basic_value_type_t<value_type>;
     using it_difference_type = std::common_type_t<typename It1::difference_type,
@@ -54,11 +55,30 @@ public:
     constexpr const_iterator end() const;
     constexpr const_iterator cend() const; 
 
-    template <ArithmeticVectorsLike<vector<value_type>> Vec>
-    Slice<It1,It2>& operator=(const Vec& other) &;
+    // template <ArithmeticVectorsLike<vector<Slice<It1,It2>::value_type>> Vec>
+    // requires std::same_as< decltype(Slice<It1,It2>::begin()),
+    //                     typename Slice<It1,It2>::iterator >
+    // Slice<It1,It2>& operator=(const Vec& other) const &;
+    template <ArithmeticVectorsLike<vector<typename Slice<It1,It2>::value_type>> Vec>
+    requires requires(Slice<It1,It2> sl) {
+        *(sl.begin()) = Slice<It1,It2>::value_type{};
+    }
+    Slice<It1, It2>& operator=(const Vec &other) & {
+        auto it = begin(), end_ = end();
+        auto it1 = other.begin();
+        while (it < end_) {
+            *it = *it1;
+            ++it;   ++it1;
+        }
+        return *this;
+    }
+
+
+    // template <ArithmeticVectorsLike<vector<value_type>> Vec>
+    // Slice<It1,It2>& operator=(const Vec& other) const & = delete;
     
     reference operator[](size_t pos);
-    const reference operator[](size_t pos) const;
+    const_reference operator[](size_t pos) const;
 
     
 };
@@ -117,17 +137,26 @@ constexpr typename Slice<It1, It2>::const_iterator Slice<It1, It2>::cend() const
     return {to,step_};
 }
 
-template <typename It1, typename It2>
-template <ArithmeticVectorsLike<vector<typename Slice<It1,It2>::value_type>> Vec>
-Slice<It1,It2>& Slice<It1, It2>::operator=(const Vec &other) & {
-    auto it = Slice<It1,It2>::begin(), end = Slice<It1,It2>::end();
-    auto it1 = other.begin();
-    while (it < end) {
-        *it = *it1;
-        ++it;   ++it1;
-    }
-    return *this;
-}
+// template <typename It1, typename It2>
+// template <ArithmeticVectorsLike<vector<value_type>> Vec>
+// inline Slice<It1, It2> &math::Slice<It1, It2>::operator=(const Vec &other) &
+// {
+//     // TODO: insert return statement here
+// }
+
+// template <typename It1, typename It2>
+// template <ArithmeticVectorsLike<vector<typename Slice<It1,It2>::value_type>> Vec>
+// requires std::same_as< decltype(Slice<It1,It2>::begin()),
+//                        typename Slice<It1,It2>::iterator >
+// Slice<It1,It2>& Slice<It1,It2>::operator=(const Vec &other) & {
+//     auto it = begin(), end_ = end();
+//     auto it1 = other.begin();
+//     while (it < end_) {
+//         *it = *it1;
+//         ++it;   ++it1;
+//     }
+//     return *this;
+// }
 
 template <typename It1, typename It2>
 auto Slice<It1, It2>::operator[](size_t pos)
@@ -138,7 +167,7 @@ auto Slice<It1, It2>::operator[](size_t pos)
 
 template <typename It1, typename It2>
 auto Slice<It1, It2>::operator[](size_t pos) const
-        -> const reference {
+        -> const_reference {
     return from[pos*step_];
 }
 
