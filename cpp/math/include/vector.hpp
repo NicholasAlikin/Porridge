@@ -245,7 +245,8 @@ public:
     template <typename... Args>
     void emplace_back(Args&&...); // universal reference
 
-    
+    void resize(size_t count);
+    void resize(size_t count, const value_type& value);
 
 
 };
@@ -301,7 +302,15 @@ void vector<T>::emplace_back(Args&&... args) {
     v.emplace_back(std::forward<Args>(args)...);
 }
 
+template <typename T>
+void math::vector<T>::resize(size_t count) {
+    v.resize(count);
+}
 
+template <typename T>
+void math::vector<T>::resize(size_t count, const T& value) {
+    v.resize(count,value);
+}
 
 // operator=
 
