@@ -968,22 +968,22 @@ std::ostream& operator<<(std::ostream& stream, const Vec& v) {
 }
 
 // get vector_t<T,Dim> size as std::array<size_t,Dim>
-template <typename T>
-void size_helper(const vector<T>& vec, size_t* sizes) {
+template <VectorLike V>
+void size_helper(const V& vec, size_t* sizes) {
     *sizes = vec.size();
-    if constexpr (is_vector_like_v<T>) {
+    if constexpr (is_vector_like_v<typename V::value_type>) {
         if (vec.size() > 0) {
-            size_helper<typename T::value_type>(vec[0], ++sizes);
+            size_helper<typename V::value_type>(vec[0], ++sizes);
         }
     }
 }
 
-template <typename T>
-auto size(const vector<T>& vec) 
-        -> std::array<size_t,vector_dim_v<vector<T>> > {
-    const size_t dim = vector_dim_v<vector<T>>;
+template <VectorLike V>
+auto size(const V& vec) 
+        -> std::array<size_t,vector_dim_v<V> > {
+    const size_t dim = vector_dim_v<V>;
     std::array<size_t,dim> sizes{};
-    size_helper<T>(vec,sizes.begin());
+    size_helper<V>(vec,sizes.begin());
     return sizes;
 }
 
