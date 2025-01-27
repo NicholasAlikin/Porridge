@@ -2,6 +2,7 @@
 
 #include "vector.hpp"
 #include "slice.hpp"
+#include "vectorlike_functions.hpp"
 #include <cmath>
 #include <numbers>
 #include <string>
@@ -13,7 +14,7 @@ constexpr double pi = std::numbers::pi;
 /*==================================
 // Generate vector-like objects
 ==================================*/
-
+namespace detail {
 // zeros - vector-like full of zeros (default constructed vector::basic_value_type)
 template <typename T, size_t Dim>
 requires (Dim == 1)
@@ -24,19 +25,6 @@ vector_t<T,Dim> zeros_helper(size_t sz) {
 template <typename T, size_t Dim>
 vector_t<T,Dim> zeros_helper(size_t sz, auto... szs) {
     return vector_t<T,Dim>(sz, zeros_helper<T,Dim-1>(szs...));
-}
-
-template <typename T, typename... Sizes>
-requires (std::is_convertible_v<Sizes,size_t> && ...)
-auto zeros(Sizes... sizes) 
-        -> vector_t<T,sizeof...(Sizes)> {
-    return zeros_helper<T,sizeof...(Sizes)>(sizes...);
-}
-
-template <typename T, size_t... sizes>
-auto zeros(std::integer_sequence<size_t,sizes...> int_seq) 
-        -> vector_t<T,sizeof...(sizes)> {
-    return zeros_helper<T,int_seq.size()>((sizes, int_seq.size()) ...);
 }
 
 template <typename T, size_t Dim>
@@ -50,10 +38,24 @@ vector_t<T,Dim> zeros_helper(const size_t* sizes) {
     size_t sz = *sizes;
     return vector_t<T,Dim>(sz, zeros_helper<T,Dim-1>(++sizes));
 }
+} // namespace detail
+
+template <typename T, typename... Sizes>
+requires (std::is_convertible_v<Sizes,size_t> && ...)
+auto zeros(Sizes... sizes) 
+        -> vector_t<T,sizeof...(Sizes)> {
+    return detail::zeros_helper<T,sizeof...(Sizes)>(sizes...);
+}
+
+template <typename T, size_t... sizes>
+auto zeros(std::integer_sequence<size_t,sizes...> int_seq) 
+        -> vector_t<T,sizeof...(sizes)> {
+    return detail::zeros_helper<T,int_seq.size()>((sizes, int_seq.size()) ...);
+}
 
 template <typename T, size_t Dim>
 vector_t<T,Dim> zeros(const std::array<size_t,Dim>& sizes) {
-    return zeros_helper<T,Dim>(sizes.begin());
+    return detail::zeros_helper<T,Dim>(sizes.begin());
 }
 
 template <typename T, VectorLike Vec>
@@ -63,7 +65,7 @@ auto zeros(const Vec& v)
 }
 
 // repmat - vector-like full of given value with type vector::basic_value_type
-
+namespace detail {
 template <typename T, size_t Dim>
 requires (Dim == 1)
 vector_t<T,Dim> repmat_helper(const T& value, size_t sz) {
@@ -74,13 +76,6 @@ vector_t<T,Dim> repmat_helper(const T& value, size_t sz, auto... sizes) {
     return vector_t<T,Dim>(sz, repmat_helper<T,Dim-1>(value, sizes...));
 }
 
-template <typename T, typename... Sizes>
-requires (std::is_convertible_v<Sizes,size_t> && ...)
-vector_t<T,sizeof...(Sizes)> repmat(const T& value, Sizes... sizes) {
-    return repmat_helper<T,sizeof...(Sizes)>(value, sizes...);
-}
-
-
 template <typename T, size_t Dim>
 requires (Dim == 1)
 vector_t<T,Dim> repmat_helper(const T& value, const size_t* sizes) {
@@ -90,12 +85,19 @@ vector_t<T,Dim> repmat_helper(const T& value, const size_t* sizes) {
 template <typename T, size_t Dim>
 vector_t<T,Dim> repmat_helper(const T& value, const size_t* sizes) {
     const size_t sz = *sizes;
-    return vector_t<T,Dim>(sz, repmat_helper<T,Dim-1>(value, ++sizes));
+    return vector_t<T,Dim>(sz, detail::repmat_helper<T,Dim-1>(value, ++sizes));
+}
+} // namespace detail
+
+template <typename T, typename... Sizes>
+requires (std::is_convertible_v<Sizes,size_t> && ...)
+vector_t<T,sizeof...(Sizes)> repmat(const T& value, Sizes... sizes) {
+    return detail::repmat_helper<T,sizeof...(Sizes)>(value, sizes...);
 }
 
 template <typename T, size_t Dim>
 vector_t<T,Dim> repmat(const T& value, std::array<size_t,Dim> sizes) {
-    return repmat_helper<T,Dim>(value, sizes.begin());
+    return detail::repmat_helper<T,Dim>(value, sizes.begin());
 }
 
 template <typename T, VectorLike Vec>
@@ -147,7 +149,7 @@ auto det_(const M& vec)
 
 }
 
-double det_(const vector_t<double,2>& mat);
+// double det_(const vector_t<double,2>& mat);
 
 template <Matrix M>
 auto det(const M& mat)
@@ -186,97 +188,453 @@ auto product(const V& vec)
     return res;
 }
 
+namespace detail {
+
 template <Matrix M1, ArithmeticVectorsLike<M1> M2>
-auto dot(const M1& mat1, const M2& mat2)
-        -> general_vector_type_t<M1,M2> {
+void check_dot_operands_sizes(const M1& mat1, const M2& mat2) {
     auto sz1 = size(mat1);
     auto sz2 = size(mat2);
     if (sz1[1] != sz2[0]) {
-        throw std::logic_error("Cannot calculate dot(mat1,mat2)! Incorrect matrices shapes!");
+        throw std::logic_error(std::string("Cannot calculate dot(mat[")
+                             + std::to_string(sz1[0])
+                             + std::string(",")
+                             + std::to_string(sz1[1])
+                             + std::string("], mat[")
+                             + std::to_string(sz2[0])
+                             + std::string(",")
+                             + std::to_string(sz2[1])
+                             + std::string("])! Incorrect matrices shapes!"));
     }
-    auto res = zeros<general_type_t<M1,M2>>(sz1[0],sz2[1]);
-    size_t i,j,k;
-    for (i = 0; i < sz1[0]; ++i) {
-        for (k = 0; k < sz1[1]; ++k) {
-            for (j = 0; j < sz2[1]; ++j) {
-                res[i][j] += mat1[i][k]*mat2[k][j];
+}
+
+template <VectorLike V3D, Vector V>
+requires Matrix<typename V3D::value_type>
+void check_dot_operands_sizes(const V3D& v3d, const V& v) {
+    auto sz1 = size(v3d);
+    auto sz2 = size(v);
+    if (sz1[2] != sz2[0]) {
+        throw std::logic_error(std::string("Cannot calculate dot(vec3d[")
+                             + std::to_string(sz1[0])
+                             + std::string(",")
+                             + std::to_string(sz1[1])
+                             + std::string(",")
+                             + std::to_string(sz1[2])
+                             + std::string("], vec[")
+                             + std::to_string(sz2[0])
+                             + std::string("])! Incorrect 3d or 1d vectors shapes!"));
+    }
+}
+
+template <VectorLike V3D, Vector V>
+requires Matrix<typename V3D::value_type>
+void check_dot_operands_sizes(const V& v, const V3D& v3d) {
+    auto sz1 = size(v);
+    auto sz2 = size(v3d);
+    if (sz1[0] != sz2[0]) {
+        throw std::logic_error(std::string("Cannot calculate dot(vec[")
+                             + std::to_string(sz1[0])
+                             + std::string("], vec3d[")
+                             + std::to_string(sz2[0])
+                             + std::string(",")
+                             + std::to_string(sz2[1])
+                             + std::string(",")
+                             + std::to_string(sz2[2])
+                             + std::string("])! Incorrect 1d or 3d vectors shapes!"));
+    }
+}
+
+template <Matrix M, Vector V>
+requires HaveGeneralType<M,V>
+void check_dot_operands_sizes(const M& mat, const V& vec) {
+    auto sz = size(mat);
+    if (sz[1] != vec.size()) {
+        throw std::logic_error(std::string("Cannot calculate dot(mat[")
+                             + std::to_string(sz[0])
+                             + std::string(",")
+                             + std::to_string(sz[1])
+                             + std::string("], vec[")
+                             + std::to_string(vec.size())
+                             + std::string("])! Incorrect matrix or vector shapes!"));
+    }
+}
+
+template <Vector V, Matrix M>
+requires HaveGeneralType<V,M>
+void check_dot_operands_sizes(const V& vec, const M& mat) {
+    auto sz = size(mat);
+    if (vec.size() != sz[0]) {
+        throw std::logic_error(std::string("Cannot calculate dot(vec[")
+                             + std::to_string(vec.size())
+                             + std::string("], mat[")
+                             + std::to_string(sz[0])
+                             + std::string(",")
+                             + std::to_string(sz[1])
+                             + std::string("])! Incorrect vector or matrix shapes!"));
+    }
+}
+
+template <Vector V1, ArithmeticVectorsLike<V1> V2>
+void check_dot_operands_sizes(const V1& vec1, const V2& vec2) {
+    if (vec1.size() != vec2.size()) {
+        throw std::logic_error(std::string("Cannot calculate dot(vec[")
+                             + std::to_string(vec1.size())
+                             + std::string("], vec[")
+                             + std::to_string(vec2.size())
+                             + std::string("])! Incorrect vectors shapes!"));
+    }
+}
+
+template <Matrix M1, ArithmeticVectorsLike<M1> M2>
+void check_dotT_operands_sizes(const M1& mat1, const M2& mat2) {
+    auto sz1 = size(mat1);
+    auto sz2 = size(mat2);
+    if (sz1[1] != sz2[1]) {
+        throw std::logic_error(std::string("Cannot calculate dotT(mat[")
+                             + std::to_string(sz1[0])
+                             + std::string(",")
+                             + std::to_string(sz1[1])
+                             + std::string("], mat[")
+                             + std::to_string(sz2[0])
+                             + std::string(",")
+                             + std::to_string(sz2[1])
+                             + std::string("])! Incorrect matrices shapes!"));
+    }
+}
+
+} // namespace detail
+
+/* dot product of matrix and matrix TODO*/
+template <Matrix M1, ArithmeticVectorsLike<M1> M2, ArithmeticVectorsLike<M1> M3>
+void dot(const M1& mat1, const M2& mat2, M3& res) {
+    detail::check_dot_operands_sizes(mat1,mat2);
+    auto itres_row = res.begin();
+    decltype(res[0].begin()) itres_col;
+
+    auto itmat1_row     = mat1.begin()
+        ,itmat1_row_end = mat1.end();
+    decltype(mat1[0].begin()) itmat1_col;
+    typename M1::basic_value_type m1_elem;
+    
+    decltype(mat2.begin()) itmat2_row, itmat2_row_end = mat2.end();
+    decltype(mat2[0].begin()) itmat2_col, itmat2_col_end;
+    
+    while (itmat1_row < itmat1_row_end) {       // i
+        itmat1_col = itmat1_row->begin();
+        itmat2_row = mat2.begin();
+        while (itmat2_row < itmat2_row_end) {   // k
+            m1_elem = *itmat1_col;
+            itres_col = itres_row->begin();
+            itmat2_col = itmat2_row->begin();
+            itmat2_col_end = itmat2_row->end();
+            while(itmat2_col < itmat2_col_end) {                           // j
+                *itres_col += m1_elem * (*itmat2_col);
+                ++itmat2_col;
+                ++itres_col;
             }
+            ++itmat2_row;
+            ++itmat1_col;
         }
-        
+
+        ++itmat1_row;
+        ++itres_row;
     }
+}
+
+template <Matrix M1, ArithmeticVectorsLike<M1> M2>
+auto dot(const M1& mat1, const M2& mat2)
+        -> general_vector_type_t<M1,M2> {
+    auto res = zeros<general_type_t<M1,M2>>(size(mat1)[0],size(mat2)[1]);
+    dot(mat1,mat2,res);
     return res;
+}
+
+
+template <Matrix M, Vector V1, Vector V2>
+requires HaveGeneralType<M,V1>
+&& HaveGeneralType<V1,V2>
+void dot(const M& mat, const V1& vec, V2& res) {
+    detail::check_dot_operands_sizes(mat,vec);
+    
+    auto itres = res.begin();
+    typename V2::basic_value_type temp_res;
+    
+    auto itmat_row = mat.begin()
+        ,itmat_row_end = mat.end();
+    decltype(mat[0].begin()) itmat_col;
+
+    decltype(vec.begin()) itvec, itvec_end = vec.end();
+    
+    while (itmat_row < itmat_row_end) {
+        temp_res = 0;
+        itvec = vec.begin();
+        itmat_col = itmat_row->begin();
+        while (itvec < itvec_end) {
+            temp_res += (*itmat_col) * (*itvec);
+            ++itvec;
+            ++itmat_col;
+        }
+        *itres = temp_res;
+        ++itmat_row;
+        ++itres;
+    }
+
 }
 
 template <Matrix M, Vector V>
 requires HaveGeneralType<M,V>
 auto dot(const M& mat, const V& vec)
         -> vector_t<general_type_t<M,V>,1> {
-    auto sz_mat = size(mat);
-    if (sz_mat[1] != vec.size()) {
-        throw std::logic_error(std::string("Cannot calculate dot(mat[")
-                             + std::to_string(sz_mat[0])
-                             + std::string(",")
-                             + std::to_string(sz_mat[1])
-                             + std::string("], vec[")
-                             + std::to_string(vec.size())
-                             + std::string("])! Incorrect matrix or vector shape!"));
-    }
-    auto res = zeros<general_type_t<M,V>>(sz_mat[0]);
-    size_t i,j;
-    for (i = 0; i < sz_mat[0]; ++i) {
-        for (j = 0; j < sz_mat[1]; ++j) {
-            res[i] += mat[i][j]*vec[j];
-        }
-    }
+    auto res = zeros<general_type_t<M,V>>(size(mat)[0]);
+    dot(mat,vec,res);
     return res;
 }
 
-template <Matrix M, Vector V, Vector V0>
-requires HaveGeneralType<M,V>
-&& HaveGeneralType<V,V0>
-void dot(const M& mat, const V& vec, V0& res) {
-    auto sz_mat = size(mat);
-    if (sz_mat[1] != vec.size()) {
-        throw std::logic_error(std::string("Cannot calculate dot(mat[")
-                             + std::to_string(sz_mat[0])
-                             + std::string(",")
-                             + std::to_string(sz_mat[1])
-                             + std::string("], vec[")
-                             + std::to_string(vec.size())
-                             + std::string("])! Incorrect matrix or vector shape!"));
-    }
-    auto it_res = res.begin();
-    decltype(vec.begin()) it_vec;
-    auto it_mat_row = mat.begin(), it_mat_row_end = mat.end();
-    decltype(mat[0].begin()) it_mat_col,it_mat_col_end;
+template <Vector V1, Matrix M, Vector V2>
+requires HaveGeneralType<V1,M>
+&& HaveGeneralType<V1,V2>
+void dot(const V1& vec, const M& mat, V2& res) {
+    detail::check_dot_operands_sizes(vec,mat);
 
-    typename V0::basic_value_type tmp;
-    while (it_mat_row != it_mat_row_end) {
-        it_vec = vec.begin();
-        it_mat_col = it_mat_row->begin();
-        it_mat_col_end = it_mat_row->end();
-        tmp = 0;
-        while (it_mat_col != it_mat_col_end) {
-            tmp += (*it_mat_col) * (*it_vec);
-            ++it_mat_col; ++it_vec;
+    decltype(res.begin()) itres;
+
+    auto itvec = vec.begin()
+        ,itvec_end = vec.end();
+    typename V1::basic_value_type temp_vec;
+
+    auto itmat_row = mat.begin();
+    decltype(mat[0].begin()) itmat_col, itmat_col_end;
+    
+    while (itvec < itvec_end) {
+        itres = res.begin();
+        itmat_col = itmat_row->begin();
+        itmat_col_end = itmat_row->end();
+        temp_vec = *itvec;
+        while (itmat_col < itmat_col_end) {
+            *itres += (*itmat_col)*temp_vec;
+            ++itmat_col;
+            ++itres;
         }
-        *it_res = tmp;
-        ++it_mat_row; ++it_res;
+
+        ++itvec;
+        ++itmat_row;
     }
 }
+
+template <Matrix M, Vector V>
+requires HaveGeneralType<M,V>
+auto dot(const V& vec, const M& mat)
+        -> vector_t<general_type_t<M,V>,1> {
+    auto res = zeros<general_type_t<M,V>>(size(mat)[1]);
+    dot(vec,mat,res);
+    return res;
+}
+
 
 template <Vector V1, ArithmeticVectorsLike<V1> V2>
 auto dot(const V1& vec1, const V2& vec2)
         -> general_type_t<V1,V2> {
-    if (vec1.size() != vec2.size()) {
-        throw std::logic_error("Cannot calculate dot(vec1,vec2)! Incorrect vectors shapes!");
-    }
+    detail::check_dot_operands_sizes(vec1,vec2);
     general_type_t<V1,V2> res{};
-    for (size_t i = 0; i < vec1.size(); ++i) {
-        res += vec1[i]*vec2[i];
+
+    auto itvec1 = vec1.begin()
+        ,itvec1_end = vec1.end();
+    auto itvec2 = vec2.begin();
+
+    while (itvec1 < itvec1_end) {
+        res += (*itvec1) * (*itvec2);
+        ++itvec1;
+        ++itvec2;
     }
     return res;
 }
+
+template <Matrix M1, ArithmeticVectorsLike<M1> M2, ArithmeticVectorsLike<M1> M3>
+void dotT(const M1& mat1, const M2& mat2T, M3& res) {
+    detail::check_dotT_operands_sizes(mat1,mat2T);
+
+    auto itres_row = res.begin();
+    decltype(res[0].begin()) itres_col;
+    typename M3::basic_value_type temp_res;
+
+    auto itmat1_row = mat1.begin()
+        ,itmat1_row_end = mat1.end();
+    decltype(mat1[0].begin()) itmat1_col, itmat1_col_end;
+
+    decltype(mat2T.begin()) itmat2_row
+                           ,itmat2_row_end = mat2T.end();
+    decltype(mat2T[0].begin()) itmat2_col;
+    
+    while (itmat1_row < itmat1_row_end) {
+        itmat2_row = mat2T.begin();
+        itres_col = itres_row->begin();
+        while (itmat2_row < itmat2_row_end) {
+            temp_res = 0;
+            itmat1_col = itmat1_row->begin();
+            itmat1_col_end = itmat1_row->end();
+            itmat2_col = itmat2_row->begin();
+            while (itmat1_col < itmat1_col_end) {
+                temp_res += (*itmat1_col) * (*itmat2_col);
+                ++itmat1_col;
+                ++itmat2_col;
+            }
+            *itres_col = temp_res;
+            ++itmat2_row;
+            ++itres_col;
+        }
+
+        ++itmat1_row;
+        ++itres_row;
+    }
+}
+
+template <Matrix M1, ArithmeticVectorsLike<M1> M2>
+auto dotT(const M1& mat1, const M2& mat2T)
+        -> general_vector_type_t<M1,M2> {
+    auto res = zeros<general_type_t<M1,M2>>(size(mat1)[0],size(mat2T)[0]);
+    dotT(mat1,mat2T,res);
+    return res;
+}
+
+template <Matrix M1, ArithmeticVectorsLike<M1> M2, ArithmeticVectorsLike<M1> M3>
+void dotUL(const M1& U, const M2& L, M3& res) {
+    detail::check_dotT_operands_sizes(U,L);
+    typename M3::basic_value_type tmp;
+    auto n = U.size();
+    for (size_t i = 0; i < n; ++i) {
+        for (size_t j = 0; j < n; ++j) {
+            tmp = 0;
+            for (size_t k = i<j?j:i; k < n; ++k) {
+                tmp += U[i][k] * L[k][j];
+            }
+            res[i][j] = tmp;
+        }
+    }
+}
+
+template <Matrix M1, ArithmeticVectorsLike<M1> M2>
+auto dotUL(const M1& U, const M2& L)
+        -> general_vector_type_t<M1,M2> {
+    auto res = zeros<general_type_t<M1,M2>>(size(U)[0],size(L)[0]);
+    dotUL(U,L,res);
+    return res;
+}
+
+template <Vector V, Matrix M, VectorLike V3D>
+requires HaveGeneralType<V,M>
+&& HaveGeneralType<V,V3D>
+&& Matrix<typename V3D::value_type>
+void dot(const V3D& v3d
+       , const V& v
+             , M& res)
+{
+    detail::check_dot_operands_sizes(v3d,v);
+
+    decltype(res.begin()) itres_row = res.begin();
+    decltype(res[0].begin()) itres_col;
+    typename M::basic_value_type res_temp;
+
+    decltype(v.begin()) itv, itv_end = v.end();
+
+    auto itM0 = v3d.begin(), itM0_end = v3d.end();
+    decltype(v3d[0].begin()) itM1, itM1_end;
+    decltype(v3d[0][0].begin()) itM2;
+
+
+    while (itM0 < itM0_end) {
+        itM1 = itM0->begin();
+        itM1_end = itM0->end();
+        itres_col = itres_row->begin();
+        while (itM1 < itM1_end) {
+            res_temp = 0.;
+            itM2 = itM1->begin();
+            itv = v.begin();
+            while (itv < itv_end) {
+                res_temp += (*itM2) * (*itv);
+                ++itM2;
+                ++itv;
+            }
+            *itres_col = res_temp;
+            ++itM1;
+            ++itres_col;
+        }
+    
+        ++itM0;
+        ++itres_row;
+    }
+}
+
+template <Vector V, Matrix M, VectorLike V3D>
+requires HaveGeneralType<V,M>
+&& HaveGeneralType<V,V3D>
+&& Matrix<typename V3D::value_type>
+void dot(const V& v, const V3D& v3d, M& res)
+{
+    detail::check_dot_operands_sizes(v,v3d);
+
+    decltype(res.begin()) itres_row;
+    decltype(res[0].begin()) itres_col;
+
+    auto itv = v.begin();
+    typename V::basic_value_type vk;
+
+    auto itM0 = v3d.begin(), itM0_end = v3d.end();
+    decltype(v3d[0].begin()) itM1, itM1_end;
+    decltype(v3d[0][0].begin()) itM2, itM2_end;
+
+
+    while (itM0 < itM0_end) {
+        vk = *itv;
+        itM1 = itM0->begin();
+        itM1_end = itM0->end();
+        itres_row = res.begin();
+        while (itM1 < itM1_end) {
+            itM2 = itM1->begin();
+            itM2_end = itM1->end();
+            itres_col = itres_row->begin();
+            while (itM2 < itM2_end) {
+                *itres_col += vk * (*itM2);
+                ++itM2;
+                ++itres_col;
+            }
+            ++itM1;
+            ++itres_row;
+        }
+    
+        ++itM0;
+        ++itv;
+    }
+    /*  for (size_t k = 0) {
+            for (size_t i = 0) {
+                for (size_t j = 0) {
+                    res[i][j] += v3d[k][i][j] * v[k]
+                }
+            }
+        }
+    */
+}
+
+template <Vector V, VectorLike V3D>
+requires HaveGeneralType<V,V3D>
+&& Matrix<typename V3D::value_type>
+auto dot(const V3D& v3d, const V& v)
+        -> vector_t<general_type_t<V,V3D>,2> 
+{
+    vector_t<general_type_t<V,V3D>,2> res = zeros<general_type_t<V,V3D>>(v3d.size(),v3d[0].size());
+    dot(v3d,v,res);
+    return res;
+}
+
+template <Vector V, VectorLike V3D>
+requires HaveGeneralType<V,V3D>
+&& Matrix<typename V3D::value_type>
+auto dot(const V& v, const V3D& v3d)
+        -> vector_t<general_type_t<V,V3D>,2> 
+{
+    vector_t<general_type_t<V,V3D>,2> res = zeros<general_type_t<V,V3D>>(v3d[0].size(),v3d[0][0].size());
+    dot(v,v3d,res);
+    return res;
+}
+
 
 template <Vector V1, ArithmeticVectorsLike<V1> V2>
 auto cross(const V1& vec1, const V2& vec2)
@@ -654,40 +1012,84 @@ auto abs(V&& vec)
     return res;
 }
 
-vector<double> solve(const vector_t<double,2>& A, const vector<double>& b);
-vector<double> solve2(const vector_t<double,2>& A, const vector<double>& b);
-vector<double> solve2(const vector<double>& A, const vector<double>& b, const vector<size_t>& diag);
-vector<double> psolve(const vector_t<double,2>& A, const vector<double>& b);
+/*Linear solver using Cholesky decomposition: for symmetrix and positive defined matrices*/
+void solve_llt(const vector_t<double,2>& A, const vector<double>& b, vector<double>& x, vector_t<double,2>& L, size_t n);
+void solve_llt(const vector_t<double,2>& A, const vector<double>& b, vector<double>& x, size_t n);
+void solve_llt(const vector_t<double,2>& A, const vector<double>& b, vector<double>& x, vector_t<double,2>& L);
+void solve_llt(const vector_t<double,2>& A, const vector<double>& b, vector<double>& x);
+// // for band-matrices
+// void solve_llt(const vector_t<double,1>& A, const vector<size_t>& diag, vector<double>& b, vector<double>& x, size_t n, vector_t<double,2>& L);
+// void solve_llt(const vector_t<double,1>& A, const vector<size_t>& diag, vector<double>& b, vector<double>& x, size_t n);
+// void solve_llt(const vector_t<double,1>& A, const vector<size_t>& diag, vector<double>& b, vector<double>& x, vector_t<double,2>& L);
+// void solve_llt(const vector_t<double,1>& A, const vector<size_t>& diag, vector<double>& b, vector<double>& x);
 
-void LDLT(const vector_t<double,2>& K, vector<double>& D, vector_t<double,2>& L);
-void LU(const vector_t<double,2>& K, vector_t<double,2>& L, vector_t<double,2>& U);
-void gauss_backward_triup(vector<double>& x, const vector_t<double,2>& A, const vector<double>& b);
-void gauss_backward_tridown(vector<double>& x, const vector_t<double,2>& A, const vector<double>& b);
+/*Cholesky decomposition: for symmetrix and positive defined matrices*/
+void LLT(const vector_t<double,2>& A, vector_t<double,2>& L, size_t n);
+void LLT(const vector_t<double,2>& A, vector_t<double,2>& L);
+// // for band-matrices
+// void LLT(const vector_t<double,1>& A, const vector<size_t>& diag, vector<double>& L, size_t n);
+// void LLT(const vector_t<double,1>& A, const vector<size_t>& diag, vector<double>& L);
 
-vector_t<double,2> inv(const vector_t<double,2>& A);
-vector_t<double,2> pinv(const vector_t<double,2>& A);
 
-template <Matrix M>
-auto transpose(const M& A)
-        -> vector_t<typename M::basic_value_type,2>
-{
+
+/*Linear solver using LDLT decomposition: for symmetrix matrices*/
+void solve_ldlt(const vector_t<double,2>& A, const vector<double>& b, vector<double>& x, vector_t<double,2>& L, vector<double>& D, size_t n);
+void solve_ldlt(const vector_t<double,2>& A, const vector<double>& b, vector<double>& x);
+
+void solve_ldlt(const vector_t<double,1>& A, const vector<size_t>& diag, const vector<double>& b, vector<double>& x, vector<double>& LT, vector<double>& D, size_t n);
+void solve_ldlt(const vector_t<double,1>& A, const vector<size_t>& diag, const vector<double>& b, vector<double>& x);
+
+
+void LDLT(const vector_t<double,2>& A, vector_t<double,2>& L, vector<double>& D, vector<double>& g, size_t n);
+void LDLT(const vector_t<double,2>& A, vector_t<double,2>& L, vector<double>& D);
+
+void LDLT(const vector_t<double,1>& A, const vector<size_t>& diag, vector<double>& LT, vector<double>& D, vector<double>& g, size_t n);
+void LDLT(const vector_t<double,1>& A, const vector<size_t>& diag, vector<double>& LT, vector<double>& D);
+
+
+/*Linear solver using LU decomposition*/
+void solve_lu(vector_t<double,2>& A, const vector<double>& b, vector<double>& x, size_t n);
+void solve_lu(vector_t<double,2>& A, const vector<double>& b, vector<double>& x);
+
+void LU(vector_t<double,2>& A, size_t n);
+void LU(vector_t<double,2>& A);
+
+
+/*Linear solver using pseudo-inverse matrix. Find solution with minimal norm*/
+void psolve(const vector_t<double,2>& A, const vector<double>& b, vector<double>& x, vector_t<double,2>& AAT, vector_t<double,2>& L, vector<double>& D);
+void psolve(const vector_t<double,2>& A, const vector<double>& b, vector<double>& x);
+
+// void psolve_weight(const vector_t<double,2>& A, const vector<double>& b, const vector_t<double,2>& W, vector<double>& x, vector_t<double,2>& AAT, vector_t<double,2>& L, vector<double>& D);
+void psolve_weight(const vector_t<double,2>& A, const vector<double>& b, const vector_t<double,2>& invW, vector<double>& x);
+
+
+/*Transpose rectangular matrix*/
+template <Matrix M1, Matrix M2>
+void transpose(const M1& A, M2& AT) {
     auto sz_A = size(A);
-    if (sz_A[0] == sz_A[1])
-        return transpose_square(A);
+    if (sz_A[0] == sz_A[1]) {
+        transpose_square(A,AT);
+        return;
+    }
 
-    vector_t<typename M::basic_value_type,2> AT = zeros<typename M::basic_value_type>(sz_A[1],sz_A[0]);
     for (size_t i = 0; i < sz_A[0]; ++i) {
         for (size_t j = 0; j < sz_A[1]; ++j) {
             AT[j][i] = A[i][j];
         }
     }
-    return AT;
 }
+
 template <Matrix M>
-auto transpose_square(const M& A)
+auto transpose(const M& A)
         -> vector_t<typename M::basic_value_type,2>
 {
-    vector_t<typename M::basic_value_type,2> AT = zeros<typename M::basic_value_type>(A.size(),A.size());
+    vector_t<typename M::basic_value_type,2> AT = zeros<typename M::basic_value_type>(A[0].size(),A.size());
+    transpose(A,AT);
+    return AT;
+}
+
+template <Matrix M1, Matrix M2>
+void transpose_square(const M1& A, M2& AT) {
     for (size_t i = 0; i < A.size(); ++i) {
         AT[i][i] = A[i][i];
         for (size_t j = i+1; j < A.size(); ++j) {
@@ -695,36 +1097,256 @@ auto transpose_square(const M& A)
             AT[j][i] = A[i][j];
         }
     }
+}
+
+template <Matrix M>
+auto transpose_square(const M& A)
+        -> vector_t<typename M::basic_value_type,2>
+{
+    vector_t<typename M::basic_value_type,2> AT = zeros<typename M::basic_value_type>(A.size(),A.size());
+    transpose_square(A,AT);
     return AT;
 }
 
-vector_t<double,2> invLowTri(const vector_t<double,2>& A);
-vector_t<double,2> invUpTri(const vector_t<double,2>& A);
-vector_t<double,2> inv(const vector_t<double,2>& A);
+void invLowTri(const vector_t<double,2>& A, vector_t<double,2>& invA);
+void invLowTriUnit(const vector_t<double,2>& A, vector_t<double,2>& invA);
+void invUpTri(const vector_t<double,2>& A, vector_t<double,2>& invA);
+void inv(const vector_t<double,2>& A, vector_t<double,2>& invA);
+void invSym(const vector_t<double,2>& A, vector_t<double,2>& invA
+            , vector_t<double,2>& L, vector<double>& D
+            , vector<double>& temp, vector_t<double,2>& invL, size_t n);
+void invSym(const vector_t<double,2>& A, vector_t<double,2>& invA);
+/*Inverse rectangular matrix: pseudo-inverse matrix*/
+void pinv(const vector_t<double,2>& A, vector_t<double,2>& pinvA);
 
 
-vector_t<double,2> rotation_tensor(double theta);
-
-/* Vector invariant of the dot product of 2 tensors (square matrises, size=3):
- mat1 and transpose(mat2) */
-template <Matrix M1, ArithmeticVectorsLike<M1> M2>
-auto vector_invariant(const M1& mat1, const M2& mat2_toT)
-        -> vector<general_type_t<M1,M2>>
+template <Vector V1, Vector V2>
+auto dyad(const V1& v1, const V2& v2)
+		-> vector_t<general_type_t<V1,V2>,2>
 {
-    
-    vector<general_type_t<M1,M2>> res = {
-		math::dot(mat1[1],mat2_toT[2]) - math::dot(mat1[2],mat2_toT[1]),
-        math::dot(mat1[2],mat2_toT[0]) - math::dot(mat1[0],mat2_toT[2]),
-        math::dot(mat1[0],mat2_toT[1]) - math::dot(mat1[1],mat2_toT[0]),
+	vector_t<general_type_t<V1,V2>,2> res = {
+		v1[0]*v2,
+		v1[1]*v2,
+		v1[2]*v2
 	};
 	return res;
 }
 
+template <Vector V>
+auto dyad(const V& v1, const V& v2, const V& v3)
+		-> vector_t<typename V::basic_value_type,3>
+{
+	vector_t<typename V::basic_value_type,3> res = zeros<typename V::basic_value_type>(v1.size(),v2.size(),v3.size());
+    for (size_t k = 0; k < v1.size(); ++k) {
+        for (size_t i = 0; i < v2.size(); ++i) {
+            double v1k_v2i = v1[k]*v2[i];
+            for (size_t j = 0; j < v3.size(); ++j) {
+                res[k][i][j] = v1k_v2i*v3[j];
+            }
+        }
+    }
+    return res;
+}
+
+template <Matrix M, Vector V>
+requires HaveGeneralType<M,V>
+auto dyad(const M& mat, const V& vec)
+		-> vector_t<general_type_t<M,V>,3>
+{
+    auto mat_sz = size(mat);
+    vector_t<general_type_t<M,V>,3> res = zeros<general_type_t<M,V>>(mat_sz[0],mat_sz[1],vec.size());
+    for (size_t k = 0; k < mat_sz[0]; ++k) {
+        for (size_t i = 0; i < mat_sz[1]; ++i) {
+            for (size_t j = 0; j < vec.size(); ++j) {
+                res[k][i][j] = mat[k][i]*vec[j];
+            }
+        }
+    }
+    return res;
+}
+
+template <Matrix M, Vector V>
+requires HaveGeneralType<M,V>
+auto dyadT0(const M& matT, const V& vec)
+		-> vector_t<general_type_t<M,V>,3>
+{
+    auto mat_sz = size(matT);
+    vector_t<general_type_t<M,V>,3> res = zeros<general_type_t<M,V>>(mat_sz[1],mat_sz[0],vec.size());
+    for (size_t k = 0; k < mat_sz[0]; ++k) {
+        for (size_t i = 0; i < mat_sz[1]; ++i) {
+            for (size_t j = 0; j < vec.size(); ++j) {
+                res[k][i][j] = matT[i][k]*vec[j];
+            }
+        }
+    }
+    return res;
+}
+
+template <Matrix M, Vector V>
+requires HaveGeneralType<M,V>
+auto dyad(const V& vec, const M& mat)
+		-> vector_t<general_type_t<M,V>,3>
+{
+    auto mat_sz = size(mat);
+    vector_t<general_type_t<M,V>,3> res = zeros<general_type_t<M,V>>(vec.size(),mat_sz[0],mat_sz[1]);
+    for (size_t k = 0; k < vec.size(); ++k) {
+        for (size_t i = 0; i < mat_sz[0]; ++i) {
+            for (size_t j = 0; j < mat_sz[1]; ++j) {
+                res[k][i][j] = vec[k]*mat[i][j];
+            }
+        }
+    }
+    return res;
+}
+
+template <Matrix M, Vector V>
+requires HaveGeneralType<M,V>
+auto dyad0T(const V& vec, const M& matT)
+		-> vector_t<general_type_t<M,V>,3>
+{
+    auto mat_sz = size(matT);
+    vector_t<general_type_t<M,V>,3> res = zeros<general_type_t<M,V>>(vec.size(),mat_sz[1],mat_sz[0]);
+    for (size_t k = 0; k < vec.size(); ++k) {
+        for (size_t i = 0; i < mat_sz[0]; ++i) {
+            for (size_t j = 0; j < mat_sz[1]; ++j) {
+                res[k][i][j] = vec[k]*matT[j][i];
+            }
+        }
+    }
+    return res;
+}
+
+
+namespace detail {
+template <NotVectorLike T>
+double rotation_tensor_helper1(const T& x, double eps = 1e-9) {
+	return (x < eps) ? 0.5 : (1. - std::cos(x))/(x*x);
+}
+template <NotVectorLike T>
+double rotation_tensor_helper2(const T& x, double eps = 1e-9) {
+	return (x < eps) ? 1.0 : std::sin(x)/x;
+}
+template <NotVectorLike T>
+double rotation_tensor_helper3(const T& x, double eps = 1e-9) {
+	return (x < eps) ? 1.0/6.0 : (x - std::sin(x))/(x*x*x);
+}
+} // namespace detail
+
+template <VectorLike V>
+void rotation_tensor(const V& v, vector_t<double,2>& L, double eps = 1e-12) {
+	/* L = E*cos(|v|) + vv*f1(|v|) + spin(v)*f2(|v|) */
+	
+	double abs_v = norm(v);
+	double cos_v = cos(abs_v);
+    double f1 = detail::rotation_tensor_helper1(abs_v,eps);
+	double f2 = detail::rotation_tensor_helper2(abs_v,eps);
+    double v_f1[] = {v[0]*f1, v[1]*f1, v[2]*f1};
+    double v_f2[] = {v[0]*f2, v[1]*f2, v[2]*f2};
+
+	
+	L[0][0] = cos_v + v[0]*v_f1[0];
+    L[0][1] =         v[0]*v_f1[1] - v_f2[2];
+    L[0][2] =       + v[0]*v_f1[2] + v_f2[1];
+
+    L[1][0] =         v[1]*v_f1[0] + v_f2[2];
+    L[1][1] = cos_v + v[1]*v_f1[1];
+    L[1][2] =       + v[1]*v_f1[2] - v_f2[0];
+
+    L[2][0] =         v[2]*v_f1[0] - v_f2[1];
+    L[2][1] =       + v[2]*v_f1[1] + v_f2[0];
+    L[2][2] = cos_v + v[2]*v_f1[2];
+    
+}
+
+template <VectorLike V>
+vector_t<double,2> rotation_tensor(const V& v, double eps = 1e-12) {
+	/* L = E*cos(|v|) + vv*f1(|v|) + spin(v)*f2(|v|) */
+	
+	
+	vector_t<double,2> L = zeros<double>(v.size(),v.size());
+    rotation_tensor(v,L,eps);
+    return L;
+}
+
+template <VectorLike V>
+void zhilin_tensor(const V& v, vector_t<double,2>& B, double eps = 1e-12) {
+	/* B = E*sin(|v|)/|v| + vv*(|v| - sin(|v|))/|v|^3 + skew(v)*(1 - cos(|v|))/|v|^2 */
+	
+	double abs_v = norm(v);
+	double f1 = detail::rotation_tensor_helper1(abs_v,eps);
+	double f2 = detail::rotation_tensor_helper2(abs_v,eps);
+    double f3 = detail::rotation_tensor_helper3(abs_v,eps);
+    double v_f1[] = {v[0]*f1, v[1]*f1, v[2]*f1};
+    double v_f3[] = {v[0]*f3, v[1]*f3, v[2]*f3};
+
+    B[0][0] = f2    + v[0]*v_f3[0];
+    B[0][1] =         v[0]*v_f3[1] - v_f1[2];
+    B[0][2] =       + v[0]*v_f3[2] + v_f1[1];
+
+    B[1][0] =         v[1]*v_f3[0] + v_f1[2];
+    B[1][1] = f2    + v[1]*v_f3[1];
+    B[1][2] =       + v[1]*v_f3[2] - v_f1[0];
+
+    B[2][0] =         v[2]*v_f3[0] - v_f1[1];
+    B[2][1] =       + v[2]*v_f3[1] + v_f1[0];
+    B[2][2] = f2    + v[2]*v_f3[2];
+    
+}
+
+template <VectorLike V>
+vector_t<double,2> zhilin_tensor(const V& v, double eps = 1e-12) {
+	/* L = E*cos(|v|) + vv*f1(|v|) + spin(v)*f2(|v|) */
+	
+	
+	vector_t<double,2> B = zeros<double>(v.size(),v.size());
+    zhilin_tensor(v,B,eps);
+    return B;
+}
+
+/* Vector invariant of the dot product of 2 tensors (square matrises, size=3):
+ mat1 and transpose(mat2) */
+template <Matrix M1, ArithmeticVectorsLike<M1> M2, Vector V>
+void vector_invariant(const M1& mat1, const M2& mat2T, V& res) {
+    res[0] = dot(mat1[1],mat2T[2]) - dot(mat1[2],mat2T[1]);
+    res[1] = dot(mat1[2],mat2T[0]) - dot(mat1[0],mat2T[2]);
+    res[2] = dot(mat1[0],mat2T[1]) - dot(mat1[1],mat2T[0]);
+}
+
+template <Matrix M1, ArithmeticVectorsLike<M1> M2>
+auto vector_invariant(const M1& mat1, const M2& mat2T)
+        -> vector<general_type_t<M1,M2>>
+{   
+    vector<general_type_t<M1,M2>> res = {
+		math::dot(mat1[1],mat2T[2]) - math::dot(mat1[2],mat2T[1]),
+        math::dot(mat1[2],mat2T[0]) - math::dot(mat1[0],mat2T[2]),
+        math::dot(mat1[0],mat2T[1]) - math::dot(mat1[1],mat2T[0]),
+	};
+	return res;
+}
+
+template <Matrix M, Vector V>
+void vector_invariant(const M& mat, V& res) {    
+    res[0] = mat[1][2] - mat[2][1];
+    res[1] = mat[2][0] - mat[0][2];
+    res[2] = mat[0][1] - mat[1][0];
+}
+
+template <Matrix M>
+auto vector_invariant(const M& mat)
+        -> vector<typename M::basic_value_type>
+{    
+    vector<typename M::basic_value_type> res = {
+		mat[1][2] - mat[2][1],
+        mat[2][0] - mat[0][2],
+        mat[0][1] - mat[1][0]
+	};
+	return res;
+}
 
 template <Matrix M>
 auto matrix_block(const M& mat, size_t i, size_t j, size_t block_rows, size_t block_cols)
 		-> math::vector< Slice<decltype(mat[0].begin()),
-							   decltype(mat[0].begin())> >
+							   decltype(mat[0].begin())> > // const_block_t
 {
 	math::vector< Slice<decltype(mat[0].begin()),
 						decltype(mat[0].begin())> > block(block_rows);
@@ -738,7 +1360,7 @@ auto matrix_block(const M& mat, size_t i, size_t j, size_t block_rows, size_t bl
 template <Matrix M>
 auto matrix_block(M& mat, size_t i, size_t j, size_t block_rows, size_t block_cols)
 		-> math::vector< Slice<decltype(mat[0].begin()),
-							   decltype(mat[0].begin())> >
+							   decltype(mat[0].begin())> > // block_t
 {
 	math::vector< Slice<decltype(mat[0].begin()),
 						decltype(mat[0].begin())> > block(block_rows);
@@ -752,7 +1374,7 @@ auto matrix_block(M& mat, size_t i, size_t j, size_t block_rows, size_t block_co
 template <Matrix M>
 void matrix_block_set(M& mat, size_t i, size_t j, size_t block_rows, size_t block_cols
 					,math::vector< Slice<decltype(mat[0].begin()),
-									     decltype(mat[0].begin())> >& block)
+									     decltype(mat[0].begin())> >& block) // block_t
 {
 	for (size_t k = 0; k < block_rows; ++k) {
 		block[k].new_slice(mat[block_rows*i+k].begin()+block_cols*j,
@@ -761,7 +1383,7 @@ void matrix_block_set(M& mat, size_t i, size_t j, size_t block_rows, size_t bloc
 }
 
 template <Vector V>
-auto skew_symmetric_tensor(const V& vec)
+auto skew_tensor(const V& vec)
 		-> vector_t<typename V::basic_value_type,2>
 {
 	vector_t<typename V::basic_value_type,2> res = {
@@ -771,4 +1393,61 @@ auto skew_symmetric_tensor(const V& vec)
 	};
 	return res;
 }
+
+/* Cross product of two tensors of the second rank */
+void cross(const vector_t<double,2>& A
+          ,const vector_t<double,2>& B
+               , vector_t<double,3>& res);
+/* Cross product of transpose and ordinary tensors of the second rank */
+void crossT0(const vector_t<double,2>& AT
+            ,const vector_t<double,2>& B
+                 , vector_t<double,3>& res);
+/* Cross product of ordinary and transpose tensors of the second rank */
+void cross0T(const vector_t<double,2>& A
+            ,const vector_t<double,2>& BT
+                 , vector_t<double,3>& res);
+void cross(const vector_t<double,3>& A
+         , const vector<double>& b
+                ,vector_t<double,3>& res);
+
+template <Vector V, Matrix M, Matrix M1>
+void cross(const V& v, const M& m, M1& res) {
+    auto v1 = v[0]
+        ,v2 = v[1]
+        ,v3 = v[2];
+    auto m1 = m[0].begin(), m1_end = m[0].end()
+        ,m2 = m[1].begin()
+        ,m3 = m[2].begin();
+    auto res1 = res[0].begin()
+        ,res2 = res[1].begin()
+        ,res3 = res[2].begin();
+    
+    while (m1 < m1_end) {
+        *res1 = v2* (*m3) - v3* (*m2);
+        *res2 = v3* (*m1) - v1* (*m3);
+        *res3 = v1* (*m2) - v2* (*m1);
+        ++res1; ++res2; ++res3;
+        ++m1;   ++m2;   ++m3;
+    }
+}
+
+void rotation_tensor_diff(const vector<double>& v
+                        , vector_t<double,3>& dLdv
+                        , const vector_t<double,2>& L
+                        , const vector_t<double,2>& B);
+void rotation_tensor_transpose_diff(const vector<double>& v
+                                  , vector_t<double,3>& dLTdv
+                                  , const vector_t<double,2>& L
+                                  , const vector_t<double,2>& B);
+void zhilin_tensor_diff(const vector<double>& v
+                      , vector_t<double,3>& dBdv
+                      , const vector_t<double,2>& B
+                      , const vector_t<double,3>& dLdv
+                      , double eps = 1e-12);
+void zhilin_tensor_transpose_diff(const vector<double>& v
+                                , vector_t<double,3>& dBdv
+                                , const vector_t<double,2>& B
+                                , const vector_t<double,3>& dLdv
+                                , double eps = 1e-12);
+        
 } // namespace math 
