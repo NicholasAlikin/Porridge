@@ -5,6 +5,7 @@
 
 namespace math {
 
+
 template <typename It1, typename It2>
 requires std::same_as<typename It1::value_type
                     , typename It2::value_type>
@@ -38,7 +39,7 @@ private:
 
 
 
-
+	Slice(const It1& from, const It2& to, it_difference_type step, size_t sz);
 public:
     
     Slice() = default;
@@ -63,11 +64,25 @@ public:
     requires requires(Slice<It1,It2> sl) {
         *(sl.begin()) = Slice<It1,It2>::value_type{};
     }
-    Slice<It1, It2>& operator=(const Vec &other) & {
+    Slice<It1, It2>& operator=(const Vec& other) & {
         auto it = begin(), end_ = end();
         auto it1 = other.begin();
         while (it < end_) {
             *it = *it1;
+            ++it;   ++it1;
+        }
+        return *this;
+    }
+
+    template <ArithmeticVectorsLike<vector<typename Slice<It1,It2>::value_type>> Vec>
+    requires requires(Slice<It1,It2> sl) {
+        *(sl.begin()) = Slice<It1,It2>::value_type{};
+    }
+    Slice<It1, It2>& operator=(Vec&& other) & {
+        auto it = begin(), end_ = end();
+        auto it1 = other.begin();
+        while (it < end_) {
+            *it = std::move(*it1);
             ++it;   ++it1;
         }
         return *this;
@@ -79,11 +94,67 @@ public:
     
     reference operator[](size_t pos);
     const_reference operator[](size_t pos) const;
-
-    
+	
+	
+	
+	operator Slice<
+		std::conditional_t<std::is_const_v<std::remove_reference_t<typename It1::reference>>,It1,
+			std::conditional_t<
+				std::same_as<It1,typename math::vector<typename It1::value_type>::iterator>
+				,typename math::vector<typename It1::value_type>::const_iterator
+				,typename math::Slice<It1,It1>::const_iterator
+			>
+		>,
+		std::conditional_t<std::is_const_v<std::remove_reference_t<typename It2::reference>>,It2,
+			std::conditional_t<
+				std::same_as<It2,typename math::vector<typename It2::value_type>::iterator>
+				,typename math::vector<typename It2::value_type>::const_iterator
+				,typename math::Slice<It2,It2>::const_iterator
+			>
+		>
+	>() const {
+		return {from, to, step_, sz};
+	}
+        // return {static_cast<ConstIt_t<It1>>(from), static_cast<ConstIt_t<It2>>(to), step_, sz};
 };
 
 
+
+// template <typename It1, typename It2>
+// Slice<It1,It2>::operator Slice<ConstIt_t<It1>,ConstIt_t<It2>>() const {
+	// return {from, to, step_, sz};
+// }
+
+
+///////////
+// template <typename It>
+// concept ConstIterator = std::is_const_v<typename It::reference>;
+
+// template <ConstIterator It>
+// struct ConstIt<It> {
+	// using type = It;
+// };
+
+
+// // vector iterator
+// template <typename It>
+// requires std::same_as<It,typename math::vector<typename It::value_type>::iterator>
+// struct ConstIt<It> {
+	// using type = typename math::vector<typename It::value_type>::const_iterator;
+// };
+// // Slice iterator
+// template <typename It>
+// requires std::same_as<It,typename math::Slice<It,It>::iterator>
+// struct ConstIt<It> {
+	// using type = typename math::Slice<It,It>::const_iterator;
+// };
+
+
+//////////
+
+template <typename It1, typename It2>
+Slice<It1,It2>::Slice(const It1& from, const It2& to, it_difference_type step, size_t sz)
+        : from(from), to(to), step_(step), sz(sz) {};
 
 template <typename It1, typename It2>
 Slice<It1,It2>::Slice(const It1& from, const It2& to, it_difference_type step)
@@ -208,7 +279,15 @@ public:
     };
 
     pointer operator->() const {
-        return operator->(it);
+        return it.operator->();
+    };
+
+    reference operator*() {
+        return *it;
+    };
+
+    pointer operator->() {
+        return it.operator->();
     };
 
     reference operator[](difference_type n) const {
@@ -264,6 +343,16 @@ public:
     bool operator>(const It& other) const {
         return other < it;
     };
+
+    /*operator "!="  is the same as operator "<"
+      because step might be != 1
+      but std functions with iterators uses only "!=" operator.*/
+    bool operator!=(const base_iterator& other) const {
+        return it.operator<(other);
+    };
+    bool operator!=(const It& other) const {
+        return it.operator<(other);
+    }
     
     bool operator<=(const base_iterator& other) const {
         return it <= other.it;
