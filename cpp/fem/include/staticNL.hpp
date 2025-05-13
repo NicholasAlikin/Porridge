@@ -22,7 +22,7 @@ where
     l - load factor ()
     g - unitial external load vector
 */
-class StaticNL: public ::npath::BasicSystem {
+class StaticNL: public ::npath::BasicSystem<> {
 private:
 public:
     
@@ -44,6 +44,8 @@ private:
     math::vector<double> temp_theta;
 	math::vector_t<double,2> temp_rotTensor;
 	math::vector_t<double,2> temp_Rsumi;
+
+    bool incremental_large_rotation;
 public:
 
     StaticNL() = default;
@@ -54,7 +56,8 @@ public:
     
     StaticNL(const Model& model
             ,const Assemble& assemble
-            ,const math::vector<size_t>& ynorm_pos);
+            ,const math::vector<size_t>& ynorm_pos
+            ,bool incremental_large_rotation = true);
     
     void initialization();
     
@@ -86,6 +89,8 @@ public:
     void solution_not_found();
     void step_back(double new_step);
 
+    double fun_norm(const math::vector<double>& fun, const math::vector<double>& y);
+
 
 
     void linear_like_solve(math::vector_t<double,2>& stif, math::vector<double>& y);
@@ -97,6 +102,7 @@ private:
                         ,math::vector_t<double,2>& jac);
     void zeros_stiffness_matrix(math::vector_t<double,2>& stif);
 
+    void do_assemble(math::vector_t<double,2>& stif, const math::vector<double>& q);
 };
 
 

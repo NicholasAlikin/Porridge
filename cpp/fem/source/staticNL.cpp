@@ -19,6 +19,8 @@ StaticNL::StaticNL(const StaticNL& other)
         , temp_theta(other.temp_theta)
         , temp_rotTensor(other.temp_rotTensor)
         , temp_Rsumi(other.temp_Rsumi)
+
+        ,incremental_large_rotation(other.incremental_large_rotation)
 {}
 
 StaticNL::StaticNL(StaticNL&& other)
@@ -38,14 +40,18 @@ StaticNL::StaticNL(StaticNL&& other)
         , temp_theta(std::move(other.temp_theta))
         , temp_rotTensor(std::move(other.temp_rotTensor))
         , temp_Rsumi(std::move(other.temp_Rsumi))
+
+        ,incremental_large_rotation(other.incremental_large_rotation)
 {}
 
 StaticNL::StaticNL(const Model& model
                   ,const Assemble& assemble
-                  ,const math::vector<size_t>& ynorm_pos)
+                  ,const math::vector<size_t>& ynorm_pos
+                  ,bool incremental_large_rotation)
         : model(model)
         , assemble(assemble)
-        , ynorm_pos(ynorm_pos)        
+        , ynorm_pos(ynorm_pos)
+        , incremental_large_rotation(incremental_large_rotation)
 {
     initialization();
 }
@@ -58,18 +64,19 @@ void StaticNL::initialization() {
     loadExt_norm = norm(loadExt);
     
     loadInt = math::zeros<double>(assemble.ndofs);
-    Rsum = AnalysisTraits::setup_Rsum(model);
     
-    temp_Dy = math::zeros<double>(assemble.ndofs+1);
-    temp_theta = math::zeros<double>(3);
-    temp_rotTensor = math::zeros<double>(3,3);
-    temp_Rsumi = math::zeros<double>(3,3);
-
+    
+    if (incremental_large_rotation) {
+        temp_Dy = math::zeros<double>(assemble.ndofs+1);
+        
+        Rsum = AnalysisTraits::setup_Rsum(model);
+        temp_Rsumi = math::zeros<double>(3,3);
+        temp_theta = math::zeros<double>(3);
+        temp_rotTensor = math::zeros<double>(3,3);
+    }
+    
     loadExt_unit = loadExt/loadExt_norm;
-    
 }
-
-
 
 
 
@@ -100,6 +107,8 @@ void StaticNL::process_total_increment(math::vector<double>& Dy
                                      , math::vector<double>& dy
                                , const math::vector<double>& predictor
                                ,                    double   ds) {
+    if (!incremental_large_rotation) return;
+
 #if 1
     double dot_pre_Dy = math::dot(predictor,Dy)
          , dot_pre_dy = math::dot(predictor,dy);
@@ -124,13 +133,11 @@ void StaticNL::system_response(math::vector<double>& fun
                              , math::vector_t<double,2>& jac
                              , math::vector<double>& y)
 {   
-    
     update_loadExt_vector(y.last());
     
     // assembleNL uses y by only indeses of q (displacement vector)
     prepare_fun_jac(fun,jac);
-    ModelTraits::do_assemble_nonlinear(model,assemble,jac,loadInt,y,Rsum,&BaseElement::tangentStiffness_innerLoad);
-    
+    do_assemble(jac,y);
     // Calculate fun = loadExt - loadInt
     math::sub(loadExt.begin(), loadInt.begin(), fun.begin(), fun.begin()+loadExt.size());
 
@@ -171,12 +178,14 @@ size_t StaticNL::response_norm_size() {
 void StaticNL::linear_like_solve(math::vector_t<double,2>& stif, math::vector<double>& y) {
     update_loadExt_vector(y.last());
     
-    ModelTraits::do_assemble_nonlinear(model,assemble,stif,loadInt,y,Rsum,&BaseElement::tangentStiffness_innerLoad);
+    do_assemble(stif,y);
     
     math::solve_ldlt(stif,loadExt,y);
 }
 
 void StaticNL::update_Rsum(math::vector<double>& q) {
+    if (!incremental_large_rotation) return;
+
     AnalysisTraits::update_Rsum(model,assemble,Rsum,q
                             ,temp_theta,temp_rotTensor,temp_Rsumi);
 }
@@ -208,16 +217,23 @@ void StaticNL::update_loadExt_vector(double new_loadExt_norm) {
 }
 
 void StaticNL::solution_not_found() {
-    std::copy(Rsum_continuation.last().begin(),Rsum_continuation.last().end(),Rsum.begin());
+    if (incremental_large_rotation)
+        std::copy(Rsum_continuation.last().begin(),Rsum_continuation.last().end(),Rsum.begin());
     // Rsum = Rsum_continuation.last();
 }
 
 void StaticNL::step_back(double) {
-    Rsum_continuation.erase(Rsum_continuation.end()-1);
-    std::copy(Rsum_continuation.last().begin(),Rsum_continuation.last().end(),Rsum.begin());
+    if (incremental_large_rotation) {
+        Rsum_continuation.erase(Rsum_continuation.end()-1);
+        std::copy(Rsum_continuation.last().begin(),Rsum_continuation.last().end(),Rsum.begin());
+    }
     // Rsum = *(Rsum_continuation.end()-1);
     // std::cout << "# SRsum = \n" << Rsum << std::endl;
     // throw 1;
+}
+
+double StaticNL::fun_norm(const math::vector<double>& fun, const math::vector<double>& y) {
+    return math::norm(fun) / y.last();
 }
 
 
@@ -242,6 +258,16 @@ void StaticNL::zeros_stiffness_matrix(math::vector_t<double,2>& stif) {
     //     (*jac_row)[last] = -(*load_ext);
     //     ++jac_row; ++load_ext;
     // }
+}
+
+
+void StaticNL::do_assemble(math::vector_t<double,2>& stif, const math::vector<double>& q) {
+    if (incremental_large_rotation) {
+        ModelTraits::assemble(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
+    }
+    else {
+        ModelTraits::assemble(model,assemble,stif,loadInt,q,&BaseElement::tangentStiffness_innerLoad);
+    }
 }
 
 } // namespace fem::npath
