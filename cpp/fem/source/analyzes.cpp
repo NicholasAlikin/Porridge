@@ -57,7 +57,7 @@ math::vector_t<double,1> AnalysisTraits::staticLD(Model& model
 	// assemble linear like system
 	// assembleNL(GDofs,elements,properties,materials,stif,loadInt,&BaseElement::tangentStiffness_innerLoad,q,Rsum
 	// 				,GDofs.elem_matrix,GDofs.elem_load, GDofs.elem_displ);
-	ModelTraits::do_assemble_nonlinear(model,assemble,stif,loadInt,q,Rsum,
+	ModelTraits::assemble(model,assemble,stif,loadInt,q,Rsum,
 										&BaseElement::tangentStiffness_innerLoad);
 	// std::cout << "q = \n" << q << std::endl;
 	// std::cout << "loadInt = \n" << loadExt << std::endl;
@@ -79,7 +79,7 @@ math::vector_t<double,1> AnalysisTraits::staticLD(Model& model
 		AnalysisTraits::update_Rsum(model,assemble,Rsum,q,temp_theta,temp_rotTensor,temp_Rsumi);
 		math::fill(stif.begin(),stif.end(), 0.0);
     	math::fill(loadInt.begin(),loadInt.end(), 0.0);
-		ModelTraits::do_assemble_nonlinear(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
+		ModelTraits::assemble(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
 
 		dload = loadExt - loadInt;
 		math::solve_ldlt(stif,assemble.diags,dload,dq,LT,D,assemble.ndofs);
@@ -96,7 +96,7 @@ math::vector_t<double,1> AnalysisTraits::staticLD(Model& model
 		AnalysisTraits::update_Rsum(model,assemble,Rsum,q,temp_theta,temp_rotTensor,temp_Rsumi);
 		math::fill(stif.begin(),stif.end(), 0.0);
     	math::fill(loadInt.begin(),loadInt.end(), 0.0);
-		ModelTraits::do_assemble_nonlinear(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
+		ModelTraits::assemble(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
 
 		dload = loadExt - loadInt;
 		math::solve_ldlt(stif,assemble.diags,dload,dq,LT,D,assemble.ndofs);
@@ -108,7 +108,7 @@ math::vector_t<double,1> AnalysisTraits::staticLD(Model& model
 			AnalysisTraits::update_Rsum(model,assemble,Rsum,q,temp_theta,temp_rotTensor,temp_Rsumi);
 			math::fill(stif.begin(),stif.end(), 0.0);
     		math::fill(loadInt.begin(),loadInt.end(), 0.0);
-			ModelTraits::do_assemble_nonlinear(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
+			ModelTraits::assemble(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
 
             dload = loadExt - loadInt;
 			math::solve_ldlt(stif,assemble.diags,dload,dq,LT,D,assemble.ndofs);
@@ -128,6 +128,7 @@ math::vector_t<double,1> AnalysisTraits::staticLD2(
 											Model& model
 											,Assemble& assemble
 											,size_t load_steps
+											, bool large_rotation_incremental
                 							, double epsq
 											, double epsload)
 {
@@ -160,14 +161,25 @@ math::vector_t<double,1> AnalysisTraits::staticLD2(
 	double cur_loadExt_abs = loadExt_abs/load_steps;
     loadExt *= cur_loadExt_abs/loadExt_abs;
     
-	math::vector_t<double,3> Rsum = AnalysisTraits::setup_Rsum(model);
+
+	// math::vector_t<double,3> Rsum = AnalysisTraits::setup_Rsum(model);
+	math::vector_t<double,3> Rsum;
+	if (large_rotation_incremental) {
+		Rsum = AnalysisTraits::setup_Rsum(model);
+	}
 
 	// std::cout << "Rsum = \n" << Rsum << std::endl;
 	// throw 1;
     
 	// assemble linear like system
-	ModelTraits::do_assemble_nonlinear(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
-	// std::cout << "q = \n" << q << std::endl;
+	if (large_rotation_incremental) {
+		ModelTraits::assemble(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
+	}
+	else {
+		ModelTraits::assemble(model,assemble,stif,loadInt,q,&BaseElement::tangentStiffness_innerLoad);
+	}
+	
+		// std::cout << "q = \n" << q << std::endl;
 	// std::cout << "loadInt = \n" << loadExt << std::endl;
 	// std::cout << "Ktmp = \n" << Ktmp << std::endl;
 	// std::cout << "stif = \n" << stif << std::endl;
@@ -185,11 +197,16 @@ math::vector_t<double,1> AnalysisTraits::staticLD2(
     math::solve_ldlt(stif,loadExt,dq,L,D,assemble.ndofs);
 	q += dq;
 	while ((math::norm(dq) > epsq) || (math::norm(dload) > epsload)) {
-		AnalysisTraits::update_Rsum(model,assemble,Rsum,q,temp_theta,temp_rotTensor,temp_Rsumi);
+		if (large_rotation_incremental)
+			AnalysisTraits::update_Rsum(model,assemble,Rsum,q,temp_theta,temp_rotTensor,temp_Rsumi);
 		math::fill(stif.begin(),stif.end(), 0.0);
     	math::fill(loadInt.begin(),loadInt.end(), 0.0);
-		ModelTraits::do_assemble_nonlinear(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
-	
+		
+		if (large_rotation_incremental)
+			ModelTraits::assemble(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
+		else
+			ModelTraits::assemble(model,assemble,stif,loadInt,q,&BaseElement::tangentStiffness_innerLoad);
+			
 		dload = loadExt - loadInt;
 		math::solve_ldlt(stif,dload,dq,L,D,assemble.ndofs);
 		q += dq;
@@ -201,22 +218,32 @@ math::vector_t<double,1> AnalysisTraits::staticLD2(
     for (size_t iter = 0; iter < load_steps-1; ++iter) {
 		loadExt *= (1.0 + 1.0/(iter+1));
 		std::cout << "#norm(loadExt) = " << math::norm(loadExt) << std::endl;
-		AnalysisTraits::update_Rsum(model,assemble,Rsum,q,temp_theta,temp_rotTensor,temp_Rsumi);
+		if (large_rotation_incremental)
+			AnalysisTraits::update_Rsum(model,assemble,Rsum,q,temp_theta,temp_rotTensor,temp_Rsumi);
 		math::fill(stif.begin(),stif.end(), 0.0);
     	math::fill(loadInt.begin(),loadInt.end(), 0.0);
-		ModelTraits::do_assemble_nonlinear(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
-		
+	
+		if (large_rotation_incremental)
+			ModelTraits::assemble(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
+		else
+			ModelTraits::assemble(model,assemble,stif,loadInt,q,&BaseElement::tangentStiffness_innerLoad);
+
 		dload = loadExt - loadInt;
 		math::solve_ldlt(stif,dload,dq,L,D,assemble.ndofs);
 		q += dq;
 		subiter = 1;
 		std::cout << "\t# subiter "<< subiter <<", |dq| = " << math::norm(dq) << ", |dload| = " << math::norm(dload) << std::endl;
 		while ((math::norm(dq) > epsq) || (math::norm(dload) > epsload)) {
-			AnalysisTraits::update_Rsum(model,assemble,Rsum,q,temp_theta,temp_rotTensor,temp_Rsumi);
+			if (large_rotation_incremental)
+				AnalysisTraits::update_Rsum(model,assemble,Rsum,q,temp_theta,temp_rotTensor,temp_Rsumi);
 			math::fill(stif.begin(),stif.end(), 0.0);
     		math::fill(loadInt.begin(),loadInt.end(), 0.0);
-			ModelTraits::do_assemble_nonlinear(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
-			
+	
+			if (large_rotation_incremental)
+				ModelTraits::assemble(model,assemble,stif,loadInt,q,Rsum,&BaseElement::tangentStiffness_innerLoad);
+			else
+				ModelTraits::assemble(model,assemble,stif,loadInt,q,&BaseElement::tangentStiffness_innerLoad);
+
 			dload = loadExt - loadInt;
 			math::solve_ldlt(stif,dload,dq,L,D,assemble.ndofs);
             q += dq;

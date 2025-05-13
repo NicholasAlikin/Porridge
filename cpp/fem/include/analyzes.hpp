@@ -16,6 +16,7 @@ struct AnalysisTraits {
 	static math::vector_t<double,1> staticLD2(Model& model
 											,Assemble& assemble
 											,size_t load_steps
+											,bool large_rotation_incremental = true
 											,double epsq = 1e-5
 											,double epsload = 1e-5);
 
