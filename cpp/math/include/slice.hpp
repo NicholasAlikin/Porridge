@@ -39,12 +39,15 @@ private:
 
 
 
-	Slice(const It1& from, const It2& to, it_difference_type step, size_t sz);
 public:
+	Slice(const It1& from, const It2& to, it_difference_type step, size_t sz);
     
     Slice() = default;
     Slice(const It1& from, const It2& to, it_difference_type step = 1);
     void new_slice(const It1& from, const It2& to, it_difference_type step = 1);
+    void update_from(const It1& from);
+    void update_to(const It2& to);
+    void update_from_to(const It1& from, const It2& to);
     
     size_t size() const;
     it_difference_type step() const;
@@ -70,6 +73,16 @@ public:
         while (it < end_) {
             *it = *it1;
             ++it;   ++it1;
+        }
+        return *this;
+    }
+
+
+    Slice<It1, It2>& operator=(const value_type& other) & {
+        auto it = begin(), end_ = end();
+        while (it < end_) {
+            *it = other;
+            ++it;
         }
         return *this;
     }
@@ -116,7 +129,16 @@ public:
 		return {from, to, step_, sz};
 	}
         // return {static_cast<ConstIt_t<It1>>(from), static_cast<ConstIt_t<It2>>(to), step_, sz};
+    
 };
+
+template <typename T, size_t Dim=1>
+using vector_slice = Slice<typename vector_t<T,Dim>::iterator,
+                           typename vector_t<T,Dim>::iterator>;
+
+template <typename T, size_t Dim=1>
+using vector_const_slice = Slice<typename vector_t<T,Dim>::const_iterator,
+                                 typename vector_t<T,Dim>::const_iterator>;
 
 
 
@@ -166,6 +188,22 @@ void Slice<It1,It2>::new_slice(const It1& from_new, const It2& to_new, it_differ
     to = to_new;
     step_ = step_new;
     sz = std::ceil(double(to-from)/step_);
+}
+
+template <typename It1, typename It2>
+void Slice<It1,It2>::update_from(const It1& from_new) {
+    from = from_new;
+}
+
+template <typename It1, typename It2>
+void Slice<It1,It2>::update_to(const It2& to_new) {
+    to = to_new;
+}
+
+template <typename It1, typename It2>
+void Slice<It1,It2>::update_from_to(const It1& from_new, const It2& to_new) {
+    from = from_new;
+    to = to_new;
 }
 
 template <typename It1, typename It2>
@@ -333,25 +371,25 @@ public:
 
     bool operator<(const base_iterator& other) const {
         return it < other.it;
-    };
+    }
     bool operator<(const It& other) const {
         return it < other;
-    };
+    }
     bool operator>(const base_iterator& other) const {
         return other.it < it;
-    };
+    }
     bool operator>(const It& other) const {
         return other < it;
-    };
+    }
 
     /*operator "!="  is the same as operator "<"
       because step might be != 1
       but std functions with iterators uses only "!=" operator.*/
     bool operator!=(const base_iterator& other) const {
-        return it.operator<(other);
-    };
+        return it < other.it;
+    }
     bool operator!=(const It& other) const {
-        return it.operator<(other);
+        return it < other;
     }
     
     bool operator<=(const base_iterator& other) const {
@@ -365,6 +403,15 @@ public:
     bool operator==(const It& other) const = delete;
 };
 
+
+// template <typename It>
+// requires It::
+// bool operator<(const typename vector<T>::const_iterator& it1,
+//                const typename Slice<typename vector<T>::const_iterator,
+//                                     typename vector<T>::const_iterator>::const_iterator& it2)
+// {
+//     return it2 > it1;
+// }
 
 
 } // namespace math
