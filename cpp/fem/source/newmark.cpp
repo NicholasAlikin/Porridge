@@ -1,19 +1,33 @@
 #include "newmark.hpp"
 
+#ifndef PRINT_TIME_STEP_UPDATE_INFO
+#define PRINT_TIME_STEP_UPDATE_INFO
+#endif
+
 namespace fem {
 
-Newmark::Newmark(double alpha,  double dt_min
-                ,double dt_max, double dt_inc
-                ,size_t max_substeps, size_t max_step_try_at_point
+Newmark::StepControl::StepControl(double step_max
+                                        , double step_min
+                                        , double step_inc
+                                        , size_t min_subiters
+                                        , size_t max_subiters
+                                        , size_t successful_steps_max
+                                        , size_t max_point_rejected_time_steps)
+        : step_max(step_max), step_min(step_min), step_inc(step_inc)
+        , min_subiters(min_subiters)
+        , successful_steps_max(successful_steps_max), max_subiters(max_subiters)
+        , max_point_rejected_time_steps(max_point_rejected_time_steps)
+{
+
+}
+
+Newmark::Newmark(double alpha
                 ,const Model& model, const Assemble& assemble
-                ,double damp_mass, double damp_stif)
+                ,double damp_mass, double damp_stif
+                ,const StepControl& step_ctrl
+                ,bool incremental_large_rotation)
         :gamma(calculate_gamma(alpha))
         ,beta(calculate_beta(beta))
-        ,dt_min(dt_min)
-        ,dt_max(dt_max)
-        ,dt_inc(dt_inc)
-        ,max_substeps(max_substeps)
-        ,max_step_try_at_point(max_step_try_at_point)
         
         ,temp_theta(BaseNode::DIM)
         ,temp_rotTensor(math::zeros<double>(BaseNode::DIM,BaseNode::DIM))
@@ -46,6 +60,9 @@ Newmark::Newmark(double alpha,  double dt_min
 
         ,temp_L(math::zeros<double>(assemble.ndofs,assemble.ndofs))
         ,temp_D(assemble.ndofs)
+
+        ,step_ctrl(step_ctrl)
+        ,incremental_large_rotation(incremental_large_rotation)
 {
 }
 
@@ -64,52 +81,53 @@ void Newmark::integrate(Newmark::IntegrationResults& results
                         ,const math::vector<double>& displacement0
                         ,const math::vector<double>& velocity0
                         ,const math::vector_t<double,3>& Rsum0
-                        ,double cur_time, double end_time, size_t nsteps
+                        ,double cur_time // start time
+                        ,double end_time
+                        ,double first_step
                         ,double max_time_error)
 {
-    integrate_precomputing(displacement0,velocity0,Rsum0,cur_time,end_time,nsteps);
+    integrate_precomputing(displacement0,velocity0,Rsum0,cur_time,end_time,first_step);
+    
     /* Calculate inital acceleration */
     ModelTraits::store_load_vector(model,assemble,load_external,cur_time);
     calc_general_load_n_matrix(model,assemble);
-    calc_init_acceleration(); 
+    calc_init_acceleration();
+    print_time_step_iteration();
     
     /* Save inital state */
-    add_solve(cur_time);
+    accept_time_step(cur_time, end_time);
     
     /* Main loop over time span*/
-    while (cur_time + dt < end_time) {
-        ++time_iter;
+    while (cur_time < end_time) {
+        ++iter_total;
 
         /* Update current time */
         cur_time += dt;
+        if (cur_time > end_time) {
+            dt = end_time - (cur_time-dt);
+            std::cout << "#Last time step, dt = " << dt << "\n";
+            if (dt < max_time_error) {
+                break;
+            }
+            update_step(dt);
+            cur_time = end_time;
+        }
 
         /* Predict state for current time */    
         predict_state();
-        std::cout << "predicted"
-        <<  " |q| = " << math::norm(displacement)
-        <<  ", |v| = " << math::norm(velocity)
-        <<  ", |a| = " << math::norm(acceleration) << std::endl;
         
-        /* Find state for current time */
+        /* Correct predicted state for current time */
         time_step(model,assemble,cur_time);
 
-        /* Save state for current time */
-        add_solve(cur_time);
+        /* If state was not corrected step is rejected */
+        if (!is_correct_time_step()) {
+            cur_time = reject_time_step();
+            continue;
+        }
         
-        print_time_step(cur_time,end_time);
-    }
-    /* Last time step */
-    dt = end_time - cur_time;
-    if (dt > max_time_error) {
-        ++time_iter;
-        update_step();
-        predict_state(); // depends on dt
-        
-
-        cur_time += dt;
-        time_step(model,assemble,cur_time);
-        add_solve(cur_time);
-        print_time_step(cur_time,end_time);
+        /* Accept corrected state */
+        accept_time_step(cur_time, end_time);
+        ++iter;
     }
 
     /* Place results */
@@ -124,16 +142,16 @@ void Newmark::integrate_precomputing(const math::vector<double>& displacement0
                                     ,const math::vector_t<double,3>& Rsum0
                                     ,double start_time
                                     ,double end_time
-                                    ,size_t nsteps)
+                                    ,double first_step)
 {
-    time_iter = 0;
+    iter = 0;
     std::copy(displacement0.begin(),displacement0.end(),displacement.begin());
     std::copy(velocity0.begin(),velocity0.end(),velocity.begin());
-    std::copy(Rsum0.begin(),Rsum0.end(),Rsum.begin());
+    if (incremental_large_rotation)
+        std::copy(Rsum0.begin(),Rsum0.end(),Rsum.begin());
     std::fill(acceleration.begin(),acceleration.end(),0.0);
 
-    dt = (end_time - start_time)/static_cast<double>(nsteps-1);
-    update_step();
+    update_step(first_step);
 }
 
 
@@ -141,7 +159,7 @@ void Newmark::integrate_precomputing(const math::vector<double>& displacement0
 void Newmark::time_step(Model& model
                        ,const Assemble& assemble
                        ,double time) {
-    time_step_iter = 0;
+    subiter = 0;
     // external load containts constant while one time step
     ModelTraits::store_load_vector(model,assemble,load_external,time);
 
@@ -150,12 +168,108 @@ void Newmark::time_step(Model& model
         calc_flag_time_step();
         inc_state(model,assemble);
 
-        ++time_step_iter;
+        ++subiter;
         print_time_step_iteration();
 
-    } while (flag_time_step == flags_time_step::OK);
-
+    } while (subiter_flag == flags_time_step::OK);
 }
+
+bool Newmark::is_correct_time_step() {
+    /* Time step is `correct` only
+    if correction was stopped because
+    residal constraints was satisfied */
+    if (subiter_flag == flags_time_step::RESIDAL) {
+        return true;
+    }
+    return false;
+}
+
+void Newmark::accept_time_step(double cur_time
+                             , double end_time) {
+    /* Save state for current time */
+    add_solve(cur_time);
+    print_time_step(cur_time,end_time);
+    step_ctrl.count_point_rejected_time_steps = 0;
+    step_ctrl.count_point_step_reduction = 0;
+    increase_time_step();
+}
+
+double Newmark::reject_time_step() {
+    ++step_ctrl.count_point_rejected_time_steps;
+    if (step_ctrl.count_point_rejected_time_steps >= step_ctrl.max_point_rejected_time_steps) {
+        time_step_back();
+        step_ctrl.count_point_step_reduction = 0;
+        step_ctrl.count_point_rejected_time_steps = 0;
+    
+    } else {
+        if (decrease_time_step()) {
+            ++step_ctrl.count_point_step_reduction;
+        }
+    }
+    return times.last();
+}
+
+bool Newmark::increase_time_step() {
+    if (dt >= step_ctrl.step_max || subiter > step_ctrl.min_subiters) {
+        step_ctrl.successful_steps = 0;
+        return false;
+    }
+
+    if (step_ctrl.successful_steps < step_ctrl.successful_steps_max) {
+        ++step_ctrl.successful_steps;
+        return false;
+    }
+
+    update_step(dt * step_ctrl.step_inc);
+    step_ctrl.successful_steps = 0;
+
+#ifdef PRINT_TIME_STEP_UPDATE_INFO
+    std::cout << "# Time step is increased! New step size: "
+              << dt << '\n';
+#endif
+    return true;
+}
+
+bool Newmark::decrease_time_step() {
+    step_ctrl.successful_steps = 0;
+
+    if (dt <= step_ctrl.step_min) return false;
+
+    update_step(dt / step_ctrl.step_inc);
+#ifdef PRINT_TIME_STEP_UPDATE_INFO
+    std::cout << "# Time step is decreased! New step size: "
+              << dt << '\n';
+#endif
+    return true;
+}
+
+void Newmark::time_step_back() {
+    /* Delete last accepted time step */
+    displacements.erase(displacements.end()-1);
+    velocities.erase(velocities.end()-1);
+    accelerations.erase(accelerations.end()-1);
+    times.erase(times.end()-1);
+
+    /* Update state to new current time */
+    displacement = displacements.last();
+    velocity = velocities.last();
+    acceleration = accelerations.last();
+    
+    if (incremental_large_rotation) {
+        rotation_tensors.erase(rotation_tensors.end()-1);
+        Rsum = rotation_tensors.last();
+    }
+    
+    /* Update time step size */
+    if (step_ctrl.count_point_step_reduction > 1) {
+        update_step(dt * math::pow(step_ctrl.step_inc,step_ctrl.count_point_step_reduction-1));
+    }
+    
+
+    std::cout << "# Time step back! Current time: "
+              << times.last() << '\n';
+}
+
 /* Calculate general load and matrix (combination of tangent matrices)
     and solve linear equation */
 void Newmark::time_step_iteration(const Model& model
@@ -168,15 +282,17 @@ void Newmark::time_step_iteration(const Model& model
 
 void Newmark::calc_flag_time_step() {
     residal_displacement = math::norm(inc_displacement);
-    residal_force = math::norm(load_general)/math::norm(load_reaction);
+    residal_force = math::norm(load_general);///math::norm(load_reaction);
     residal_work = math::dot(load_general,inc_displacement);
     if ((residal_force < max_residal_force)
         && (residal_work < max_residal_work)
         && (residal_displacement < max_residal_displacement))
     {
-        flag_time_step = flags_time_step::RESIDAL;
+        subiter_flag = flags_time_step::RESIDAL;
+    } else if (subiter >= step_ctrl.max_subiters) {
+        subiter_flag = flags_time_step::MAX_TIME_STEP_ITERS;
     } else {
-        flag_time_step = flags_time_step::OK;
+        subiter_flag = flags_time_step::OK;
     }
 }
 
@@ -189,28 +305,39 @@ void Newmark::calc_general_load_n_matrix(const Model& model
     math::fill(load_inertia.begin(),load_inertia.end(),0.0);
     /* Function to calculate element matrix and load vector */
 #if 0
-    ModelTraits::do_assemble_nonlinear(model,assemble,matrix_mass,load_inertia
+    ModelTraits::assemble(model,assemble,matrix_mass,load_inertia
                                 ,displacement,velocity,acceleration,Rsum
                                 ,&BaseElement::tangentMass_inertiaLoad);
 #else
     math::fill(matrix_gyro.begin(),matrix_gyro.end(),0.0);
-    ModelTraits::do_assemble_nonlinear(model,assemble,matrix_mass,matrix_gyro,load_inertia
-                                ,displacement,velocity,acceleration,Rsum
-                                ,&BaseElement::tangentMassGyro_inertiaLoad);
+    if (incremental_large_rotation) {
+        ModelTraits::assemble(model,assemble,matrix_mass,matrix_gyro,load_inertia
+                                    ,displacement,velocity,acceleration,Rsum
+                                    ,&BaseElement::tangentMassGyro_inertiaLoad);
+    } else {
+        ModelTraits::assemble(model,assemble,matrix_mass,matrix_gyro,load_inertia
+                                    ,displacement,velocity,acceleration
+                                    ,&BaseElement::tangentMassGyro_inertiaLoad);
+    }
 #endif
     /* Calculate tangent stiffness matrix and inner load */
     math::fill(matrix_stif.begin(),matrix_stif.end(),0.0);
     math::fill(load_inner.begin(),load_inner.end(),0.0);
-    ModelTraits::do_assemble_nonlinear(model,assemble,matrix_stif,load_inner
-                                ,displacement,Rsum
-                                ,&BaseElement::tangentStiffness_innerLoad);
-    
-    /* Rayleight damping is used,
+    if (incremental_large_rotation) {
+        ModelTraits::assemble(model,assemble,matrix_stif,load_inner
+                                    ,displacement,Rsum
+                                    ,&BaseElement::tangentStiffness_innerLoad);
+    } else {
+        ModelTraits::assemble(model,assemble,matrix_stif,load_inner
+                                    ,displacement
+                                    ,&BaseElement::tangentStiffness_innerLoad);
+    }
+    /* Rayleigh damping is used,
     so tangent damp matrix and damp load is not calculated
     by assemble elements matrices and loads*/
     
     /* Calculate general matrix as linear combination of mass and stiffness matrices.
-    Damp matrix is calculated here using Rayleight damping */
+    Damp matrix is calculated here using Rayleigh damping */
     calc_matrix_general();
 
     /* Calculate damping load as dot product of damp matrix and velocity */
@@ -225,7 +352,9 @@ void Newmark::add_solve(double cur_time)
     displacements.push_back(displacement);
     velocities.push_back(velocity);
     accelerations.push_back(acceleration);
-    /* Not neaded to update Rsum, because on every time step iteration this update happens */
+    
+    if (incremental_large_rotation)
+        rotation_tensors.push_back(Rsum);
 
     times.push_back(cur_time);
 }
@@ -263,7 +392,7 @@ void Newmark::calc_matrix_general() {
                          + (*damp_col + *gyro_col)*gamma__beta_dt
                          + (*stif_col);
 
-            /* If used Rayleight damping */
+            /* If used Rayleigh damping */
             // *general_col = (*mass_col)*(beta_dt2_1 + gamma__beta_dt*damp_mass)
                         //  + (*stif_col)*(1.0        + gamma__beta_dt*damp_stif);
 
@@ -334,7 +463,7 @@ void Newmark::calc_state() {
 
 /* Calculate state prediction dqidt and d2qidt2 assuming q(i) = q(i-1)*/
 void Newmark::predict_state() {
-#if 0
+#if 1
     auto vel        = velocity.begin()
         ,vel_end    = velocity.end()
         ,vel_prev   = velocities.last().begin()
@@ -355,6 +484,10 @@ void Newmark::predict_state() {
         // ++accel;
         ++accel_prev;
     }
+    // std::cout << "predicted"
+    //     <<  " |q| = " << math::norm(displacement)
+    //     <<  ", |v| = " << math::norm(velocity)
+    //     <<  ", |a| = " << math::norm(acceleration) << std::endl;
 #endif
 }
 
@@ -379,18 +512,23 @@ void Newmark::inc_state(const Model& model
         ++vel;
         ++accel;
     }
-    /* Update Rsum after increment velocity and acceleration,
-        because they don`t have to be less than 2pi */
-    AnalysisTraits::update_Rsum( model
-							    ,assemble
-							    ,Rsum
-							    ,displacement
-							    ,temp_theta
-							    ,temp_rotTensor
-							    ,temp_Rsumi);
+
+    if (incremental_large_rotation) {
+        /* Update Rsum after increment velocity and acceleration,
+            because they don`t have to be less than 2pi */
+        AnalysisTraits::update_Rsum( model
+                                    ,assemble
+                                    ,Rsum
+                                    ,displacement
+                                    ,temp_theta
+                                    ,temp_rotTensor
+                                    ,temp_Rsumi);
+    }
 }
 
-void Newmark::update_step() {
+void Newmark::update_step(double new_step) {
+    dt = new_step;
+
     gamma__beta_dt = gamma/(beta*dt);
     beta_dt_1 = 1./(beta*dt);
     beta_dt2_1 = beta_dt_1/dt;
@@ -399,7 +537,7 @@ void Newmark::update_step() {
 
 }
 
-/* Calculate damping load using Rayleight damping */
+/* Calculate damping load using Rayleigh damping */
 void Newmark::calc_load_damp() {
     /* fdamp = matrix_damp * velocity */
     math::fill(load_damping.begin(), load_damping.end(), 0.0);
@@ -412,9 +550,10 @@ void Newmark::calc_init_acceleration() {
 }
 
 void Newmark::print_time_step(double cur_time, double end_time) {
-    std::cout << "#Iter " << time_iter
+    std::cout << "#Iter " << iter
             << ", time " << cur_time << "/" << end_time
             << ", time step " << dt
+            << ", |fext| = " << math::norm(load_external)
             <<  "\n";
 #if 0
     std::cout << cur_time << ' ' << displacement << '\n'; 
@@ -422,16 +561,20 @@ void Newmark::print_time_step(double cur_time, double end_time) {
 }
 
 void Newmark::print_time_step_iteration() {
-    std::cout <<"#\tsub iter " << time_step_iter
+    std::cout <<"#\tsub iter " << subiter
             <<  ", |dq| = " << residal_displacement
             <<  ", |f| = " << residal_force
             <<  ", |f*dq| = " << residal_work
-#if 1
+#if 0
             <<  ", |q| = " << math::norm(displacement)
             <<  ", |v| = " << math::norm(velocity)
             <<  ", |a| = " << math::norm(acceleration)
 #endif
 #if 0
+            <<  ", |finert| = " << math::norm(load_inertia)
+            <<  ", |finner| = " << math::norm(load_inner)
+            <<  ", |fdamp| = " << math::norm(load_damping)
+            <<  ", |fext| = " << math::norm(load_external)
             <<  ", |M-MT| = " << math::norm(matrix_mass-math::transpose(matrix_mass))
             <<  ", |K-KT| = " << math::norm(matrix_stif-math::transpose(matrix_stif))
             <<  ", |G-GT| = " << math::norm(matrix_gyro-math::transpose(matrix_gyro))
