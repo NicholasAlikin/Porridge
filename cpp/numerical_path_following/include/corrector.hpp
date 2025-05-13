@@ -40,9 +40,9 @@ public:
     
     BasicSystem basic_system;
     PathFollower path_follower;
-
-private:
-    math::vector_t<double,2> jac;
+    using jac_t = PathFollower::jac_t;
+// private:
+    jac_t jac;
     math::vector<double>     fun;
     math::vector<double>     dy;
     math::vector<double>     Dy;
@@ -52,7 +52,7 @@ public:
     double _dy_norm = 0, _fun_norm = 0;
     double _epsx = 1e-5, _epsf = 1e-5;
     double _dx = 1e-5;
-    size_t _max_iter = 40;
+    size_t _max_iter = 8;
 
 public:
 
@@ -92,14 +92,16 @@ Corrector<BasicSystem,PathFollower>::Corrector(const BasicSystem& basic_system
                                              , const PathFollower& path_follower)
         : basic_system(basic_system)
         , path_follower(path_follower)
-        , jac(math::zeros<double>(path_follower.jac_size()))
+        , jac(path_follower.jac_init())
         , fun(math::zeros<double>(path_follower.fun_size()))
         , dy (math::zeros<double>(path_follower.system_size()))
         , Dy (math::zeros<double>(path_follower.system_size()))
 {}
-template <typename BasicSystem, typename PathFollower>
-Corrector(const BasicSystem&, const PathFollower&) -> Corrector<BasicSystem,PathFollower>;
 
+
+template <typename BasicSystem, typename PathFollower>
+Corrector(const BasicSystem&, const PathFollower&)
+        -> Corrector<BasicSystem,PathFollower>;
 
 
 template <typename BasicSystem, typename PathFollower>
@@ -118,9 +120,10 @@ void Corrector<BasicSystem,PathFollower>::process(math::vector<double>& y
                                            , const math::vector<double>& predictor
                                            , const math::vector<double>& previous
                                            ,                    double   ds) {
-    /* It belives, that `y` was calculated by this method,
-        so it is equal to previos */
+    /* Its assumed, that `y` was calculated by this method,
+    so it is equal to previos */
     process_initialization();
+    
     y += predictor;
     std::copy(predictor.begin(),predictor.end(),Dy.begin());
 
@@ -208,13 +211,9 @@ template <typename BasicSystem, typename PathFollower>
 void Corrector<BasicSystem,PathFollower>::process_exitflag(const math::vector<double>& dy
                                                          , const math::vector<double>& fun
                                                          , const math::vector<double>& y) {
-    _dy_norm = norm(dy);
-#if 0
-    // if constexpr (std::is_same_v<BasicSystem,>)
-    _fun_norm = norm(fun) / y.last();
-#else
-    _fun_norm = norm(fun);
-#endif
+    _dy_norm = math::norm(dy);
+    _fun_norm = basic_system.fun_norm(fun,y);
+
     if (_dy_norm < _epsx && _fun_norm < _epsf) {
         exitflag = EXITFLAG::NORM_VAR_AND_FUN;
     } else if (iter >= _max_iter) {
