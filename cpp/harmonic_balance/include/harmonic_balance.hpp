@@ -8,7 +8,7 @@
 namespace npath {
 
 
-class HBM: public BasicSystem {
+class HBM: public BasicSystem<> {
 private:
 public:
     
@@ -47,7 +47,9 @@ public:
     void calculate_response_norm(const math::vector<double>& y
                                      , math::vector<double>& ynorm);
 
-    size_t response_norm_size();  
+    size_t response_norm_size();
+    double fun_norm(const math::vector<double>& fun,
+                    const math::vector<double>& y);
 
 
     math::vector_t<double,2> linear_system_dynamic_reaction(double freq) const;

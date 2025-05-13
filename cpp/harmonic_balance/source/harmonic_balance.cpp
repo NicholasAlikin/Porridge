@@ -123,6 +123,11 @@ size_t HBM::response_norm_size() {
     return ndof;
 }
 
+double HBM::fun_norm(const math::vector<double>& fun,
+                    const math::vector<double>& y) {
+    return math::norm(fun);
+}
+
 void HBM::continuation_initialization(math::vector_t<double,2>& jac
                                      ,math::vector<double>& ynorm) {
     
