@@ -1,3 +1,4 @@
+#pragma once
 /*Vector like type traits: concepts, meta-functions*/
 #include <concepts>
 #include <type_traits>
