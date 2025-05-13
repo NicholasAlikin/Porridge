@@ -36,9 +36,9 @@ public:
     Continuation() = default;
     Continuation(const Corrector& corrector, const Predictor& predictor);
 
-    void process(const math::vector<double>& y0, double param_start, double param_end, double ds0
-        , bool if_printiter, double arclen_min=1e-4, double arclen_max=1.0, double arclen_inc=2.0
-        , size_t successful_steps_max=10, size_t min_corrector_iters=4);
+    void process(math::vector_t<double,2>& Y,const math::vector<double>& y0, double param_start, double param_end, double ds0
+                              , bool if_printiter, double arclen_min=1e-4, double arclen_max=1.0, double arclen_inc=2.0
+                              , size_t successful_steps_max=10, size_t min_corrector_iters=4);
     
     void process_sub_iteration(const math::vector<double>& y
                                    , math::vector_t<double,2>& Y
@@ -72,11 +72,11 @@ Continuation<Corrector,Predictor>::Continuation(const Corrector& corrector, cons
 
 
 template <typename Corrector, typename Predictor>
-void Continuation<Corrector,Predictor>::process(const math::vector<double>& y0, double param_start, double param_end, double ds0
+void Continuation<Corrector,Predictor>::process(math::vector_t<double,2>& Y, const math::vector<double>& y0, double param_start, double param_end, double ds0
                 , bool if_printiter, double arclen_min, double arclen_max, double arclen_inc
                 , size_t successful_steps_max, size_t min_corrector_iters) {
     math::vector<double> ynorm;
-    math::vector_t<double,2> Y, Ynorm;
+    math::vector_t<double,2> Ynorm;
     math::vector<double> y = y0;
     process_initialization(param_start,param_end,ds0,ynorm);
 
@@ -95,8 +95,6 @@ void Continuation<Corrector,Predictor>::process(const math::vector<double>& y0, 
         process_sub_iteration(y,Y,Ynorm,ynorm,param_end,if_printiter);
     }
     process_end_message();
-    // std::cout << "# y last = \n" << y << '\n';
-    // std::cout << "# Y = \n" << Y << std::endl;
 }
 
 template <typename Corrector, typename Predictor>
@@ -181,7 +179,7 @@ bool Continuation<Corrector,Predictor>::decrease_step(double arclen_min, double 
      
     _ds /= arclen_inc;
     std::cout << "# Arc-length step is decreased! New step size: "
-              << _ds << '\n';
+              << _ds << std::endl;
     return true;
 }
 
@@ -227,7 +225,7 @@ bool Continuation<Corrector,Predictor>::is_correct_solution(math::vector<double>
         _count_not_correct_solution = 0;
         if (_count_point_step_reduction > 1)
             _ds *= pow(arclen_inc,_count_point_step_reduction-1);
-        std::cout << "# Step back! New step length " << _ds << '\n';
+        std::cout << "# Step back! New step length " << _ds << std::endl;
         _count_point_step_reduction = 0;
         Y.erase(Y.end()-1);
         Ynorm.erase(Ynorm.end()-1);
