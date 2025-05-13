@@ -3,6 +3,7 @@
 #pragma once
 
 #include "linalg.hpp"
+#include "tensor_operations.hpp"
 
 
 namespace fem {
