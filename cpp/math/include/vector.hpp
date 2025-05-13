@@ -85,8 +85,8 @@ public:
     template <std::input_iterator InputIt>
     vector(InputIt first, InputIt last) : v(first,last) {}
 
-    vector(const Slice<iterator,iterator>& sl);
-    vector(const Slice<const_iterator,const_iterator>& sl);
+    explicit vector(const Slice<iterator,iterator>& sl);
+    explicit vector(const Slice<const_iterator,const_iterator>& sl);
 
     ~vector() {}//{ std::cout << "~vector [" << *this << "]"<< std::endl; };
 
@@ -131,28 +131,21 @@ public:
 
     template <typename U>
     friend void swap(vector<U>&, vector<U>&);
+
+    T* data();
+    const T* data() const;
 };
 
 template <typename It1, typename It2>
 vector(const Slice<It1,It2>&) -> vector<typename It1::value_type>;
 
 template <typename T>
-vector<T>::vector(const Slice<iterator, iterator> &sl) : v(sl.size()) {
-    auto it_ = begin();
-    auto it1 = sl.begin(), end1 = sl.end();
-    while (it1 < end1) {
-        *it_ = *it1;
-        ++it_;   ++it1;
-    }
+vector<T>::vector(const Slice<iterator, iterator> &sl)
+        : vector<T>(sl.begin(),sl.end()) {
 }
 template <typename T>
-vector<T>::vector(const Slice<const_iterator, const_iterator> &sl) : v(sl.size()) {
-    auto it_ = begin();
-    auto it1 = sl.begin(), end1 = sl.end();
-    while (it1 < end1) {
-        *it_ = *it1;
-        ++it_;   ++it1;
-    }
+vector<T>::vector(const Slice<const_iterator, const_iterator> &sl)
+        : vector<T>(sl.begin(),sl.end()) {
 }
 
 
@@ -202,6 +195,19 @@ template <typename T>
 vector<T>::iterator vector<T>::erase(typename vector<T>::const_iterator first, typename vector<T>::const_iterator last) {
     return v.erase(first,last);
 }
+
+
+template <typename T>
+T* vector<T>::data() {
+    return v.data();
+}
+
+
+template <typename T>
+const T* vector<T>::data() const {
+    return v.data();
+}
+
 
 // operator=
 
