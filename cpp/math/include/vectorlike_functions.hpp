@@ -1,3 +1,4 @@
+#pragma once
 /*Function specified for vector like objects:
     o operatos (+,-,/,*,>>)
     o copy (without allocations)
@@ -676,6 +677,51 @@ void fill(It first, It last, const T& value) {
     }
 }
 
+/* Fill first n1,n2,... elements of VectorLike */
+namespace detail {
+
+template <VectorLike V, typename T>
+requires std::is_convertible_v<T,typename V::value_type>
+void fill_helper(V& v, const T& value, size_t sz) {
+    fill(v.begin(),v.begin()+sz,value);
+}
+
+template <VectorLike V, typename T, typename... Sizes>
+void fill_helper(V& v, const T& value, size_t sz, Sizes... sizes) {
+    auto it = v.begin();
+    auto end = it + sz;
+    while (it < end) {
+        fill_helper(*it,value,sizes...);
+        ++it;
+    }
+}
+
+
+} // namespace detail
+
+
+template <VectorLike V, typename T, typename... Sizes>
+requires (std::is_convertible_v<Sizes,size_t> && ...)
+void fill(V& v, const T& value, Sizes... sizes) {
+    detail::fill_helper(v,value,sizes...);
+}
+
+
+template <VectorLike V, typename T>
+requires std::is_convertible_v<T,typename V::value_type>
+void fill(V& v, const T& value) {
+    fill(v.begin(),v.end(),value);
+}
+
+template <VectorLike V, typename T>
+void fill(V& v, const T& value) {
+    auto it = v.begin();
+    auto end = v.end();
+    while (it < end) {
+        fill(*it,value);
+        ++it;
+    }
+}
 
 
 } // namespace math 
