@@ -4,6 +4,8 @@
 #include "fem_base.hpp"
 #include "nodes.hpp"
 
+#include "dft.hpp"
+
 #include <cassert>
 
 namespace fem {
@@ -82,12 +84,60 @@ struct BaseElement {
 									, const math::vector_t<double,1>& q ) const = 0;
 
 	virtual void tangentMass_inertiaLoad(math::vector_t<double,2>& M
-									  , math::vector_t<double,1>& inert_load
-								, const math::vector_t<double,1>& property
-	 						    , const math::vector_t<double,1>& material
-								, const math::vector_t<double,1>& q
-								, const math::vector_t<double,1>& dqdt
-								, const math::vector_t<double,1>& d2qdt2 ) const = 0;
+								 	   , math::vector_t<double,1>& inert_load
+								 , const math::vector_t<double,1>& property
+	 						     , const math::vector_t<double,1>& material
+								 , const math::vector_t<double,1>& q
+								 , const math::vector_t<double,1>& dqdt
+								 , const math::vector_t<double,1>& d2qdt2 ) const = 0;
+
+	virtual void tangentMassGyro_inertiaLoad(math::vector_t<double,2>& M
+									 	   , math::vector_t<double,2>& G
+									 	   , math::vector_t<double,1>& inert_load
+									 , const math::vector_t<double,1>& property
+	 						    	 , const math::vector_t<double,1>& material
+									 , const math::vector_t<double,1>& q
+									 , const math::vector_t<double,1>& dqdt
+									 , const math::vector_t<double,1>& d2qdt2 ) const = 0;
+	
+	virtual void frequency_tangentMatrix_Load(math::vector_t<double,2>& matrix
+											,math::vector_t<double,1>& load
+									  ,const math::vector_t<double,1>& property
+									  ,const math::vector_t<double,1>& material
+									  ,const math::vector_t<double,1>& q
+									  ,const math::vector_t<double,1>& dqdt
+									  ,const math::vector_t<double,1>& d2qdt2
+                                                  ,const ::npath::DFT& dft
+                                                               ,double frequency
+                                            ,math::vector_t<double,3>& buffer_dft_matrix
+                                            ,math::vector_t<double,1>& buffer_dft_vector
+                                            ) const = 0;
+
+    virtual void frequency_tangentMatrix_Load(math::vector_t<double,2>& matrix
+											,math::vector_t<double,1>& load
+                                            ,math::vector_t<double,1>& extendent_column
+									  ,const math::vector_t<double,1>& property
+									  ,const math::vector_t<double,1>& material
+									  ,const math::vector_t<double,1>& u
+									  ,const math::vector_t<double,1>& dudt
+									  ,const math::vector_t<double,1>& d2udt2
+                                      ,const math::vector_const_slice<double>& q
+                                                  ,const ::npath::DFT& dft
+                                                               ,double frequency
+                                            ,math::vector_t<double,3>& buffer_dft_matrix
+                                            ,math::vector_t<double,1>& buffer_dft_vector
+                                            ) const = 0;
+    
+    virtual void frequency_Load(             math::vector_t<double,1>& load
+									  ,const math::vector_t<double,1>& property
+									  ,const math::vector_t<double,1>& material
+									  ,const math::vector_t<double,1>& u
+									  ,const math::vector_t<double,1>& dudt
+									  ,const math::vector_t<double,1>& d2udt2
+                                                  ,const ::npath::DFT& dft
+                                                               ,double frequency
+                                            ,math::vector_t<double,1>& buffer_dft_vector
+                                            ) const = 0;
 
 	template <std::derived_from<BaseElement> El, std::random_access_iterator It>
 	static auto prms_R0(It&& prmsIt)
